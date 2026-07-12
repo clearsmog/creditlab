@@ -62,18 +62,12 @@ data sources (SEC EDGAR fundamentals, CRSP/WRDS market data,
 - [ ] **Phase 6 — Dashboard**: interactive Streamlit app
 - [ ] **Phase 7 (optional) — Counterparty risk**: CVA/PFE demo via ORE Python bindings
 
-## Data licensing
+## Data
 
-Models are developed on licensed academic data (WRDS Compustat/CRSP primarily, with
-LSEG/Bloomberg where useful), accessed legitimately through a university subscription.
-License terms prohibit redistributing raw or reconstructable data, so this repo publishes
-code, methodology, and aggregate results only — never the underlying panel.
-
-For reproducibility, the pipeline also supports the SEC EDGAR XBRL API — free and
-license-clean — so anyone can run the full platform end-to-end on public data without a
-data subscription. Transition matrices and default-rate calibration come from S&P/Moody's
-publicly published annual default & transition studies, which are citable without
-restriction. See `docs/RESEARCH.md` for details.
+Fundamentals come from the SEC EDGAR XBRL API (free, no key) and WRDS Compustat/CRSP via
+university access. Transition matrices and default-rate calibration use S&P/Moody's
+published annual default & transition studies. This is a private learning project;
+raw data lives in `data/` and stays out of git.
 
 ## Setup
 
