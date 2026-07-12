@@ -27,7 +27,7 @@ from creditlab.data.edgar import (
     fetch_companyfacts,
     fetch_submissions,
 )
-from creditlab.data.labels import default_episodes
+from creditlab.data.labels import default_episodes, harvest_defaulter_ciks
 from creditlab.data.ratios import compute_ratios
 
 EXCHANGE_MAP_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
@@ -55,6 +55,7 @@ def _firm_frame(cik: int, ticker: str, name: str, min_years: int) -> pd.DataFram
     df = df.dropna(subset=["assets"])
     if len(df) < min_years:
         return None
+    name = name or facts.get("entityName", "")
 
     doc = fetch_submissions(cik)
     df = df.reset_index()
@@ -81,16 +82,22 @@ def build_labeled_panel(
     seed: int = 42,
     min_years: int = 3,
     exclude_financials: bool = True,
+    with_defaulters: bool = False,
 ) -> pd.DataFrame:
     """Fetch, assemble, and label the firm-year panel for a universe sample."""
-    rows = list(universe.itertuples(index=False))
+    rows = [(int(f.cik), f.ticker, f.name) for f in universe.itertuples(index=False)]
     if sample is not None and sample < len(rows):
         rows = random.Random(seed).sample(rows, sample)
+    if with_defaulters:
+        sampled = {cik for cik, _, _ in rows}
+        harvested = [c for c in harvest_defaulter_ciks() if c not in sampled]
+        print(f"appending {len(harvested)} harvested defaulter CIKs")
+        rows += [(c, "", "") for c in harvested]
 
     frames, skipped = [], 0
-    for i, firm in enumerate(rows, 1):
+    for i, (cik, ticker, name) in enumerate(rows, 1):
         try:
-            df = _firm_frame(int(firm.cik), firm.ticker, firm.name, min_years)
+            df = _firm_frame(cik, ticker, name, min_years)
         except requests.HTTPError:  # shells/funds/SPACs without XBRL facts
             df = None
         if df is None:
@@ -118,6 +125,11 @@ def main() -> None:
     parser.add_argument("--sample", type=int, default=300, help="number of issuers (0 = all)")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--include-financials", action="store_true")
+    parser.add_argument(
+        "--with-defaulters",
+        action="store_true",
+        help="append delisted defaulter CIKs harvested via EDGAR full-text search",
+    )
     parser.add_argument("--out", default="data/processed/panel.parquet")
     args = parser.parse_args()
 
@@ -128,6 +140,7 @@ def main() -> None:
         sample=args.sample or None,
         seed=args.seed,
         exclude_financials=not args.include_financials,
+        with_defaulters=args.with_defaulters,
     )
     panel = compute_ratios(panel)
 

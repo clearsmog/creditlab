@@ -14,9 +14,51 @@ from __future__ import annotations
 
 import pandas as pd
 
-from creditlab.data.edgar import fetch_submissions, fetch_submissions_page
+import json
+
+from creditlab.data.edgar import CACHE_DIR, _get, fetch_submissions, fetch_submissions_page
 
 ITEM_BANKRUPTCY = "1.03"
+FTS_URL = "https://efts.sec.gov/LATEST/search-index"
+FTS_MAX_HITS = 10_000  # API refuses deeper pagination; slice by year to stay under
+
+
+def harvest_defaulter_ciks(
+    start_year: int = 2009, end_year: int = 2026, refresh: bool = False
+) -> list[int]:
+    """CIKs of issuers whose 8-Ks mention "Item 1.03", via EDGAR full-text search.
+
+    This recovers delisted defaulters missing from the current-listed universe
+    (the survivorship-bias fix). Hits are candidates only — the phrase can
+    appear in any 8-K body — but candidates are cheap to verify because
+    `default_episodes` checks the authoritative item list per filing.
+    FTS coverage starts 2001; we start at 2009 to match XBRL fundamentals.
+    """
+    cache = CACHE_DIR / "defaulter_ciks.json"
+    if cache.exists() and not refresh:
+        return json.loads(cache.read_text())
+
+    ciks: set[int] = set()
+    for year in range(start_year, end_year + 1):
+        offset = 0
+        while True:
+            doc = _get(
+                f"{FTS_URL}?q=%22Item%201.03%22&forms=8-K"
+                f"&startdt={year}-01-01&enddt={year}-12-31&from={offset}"
+            ).json()
+            hits = doc["hits"]["hits"]
+            for h in hits:
+                ciks.update(int(c) for c in h["_source"]["ciks"])
+            offset += len(hits)
+            total = min(doc["hits"]["total"]["value"], FTS_MAX_HITS)
+            if not hits or offset >= total:
+                break
+        print(f"  FTS {year}: {offset} filings, {len(ciks)} unique CIKs so far")
+
+    result = sorted(ciks)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(result))
+    return result
 
 
 def _filing_frames(cik: int) -> list[pd.DataFrame]:

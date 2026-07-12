@@ -169,6 +169,12 @@ def annual_record(facts: dict) -> pd.DataFrame:
                 series[concept] = s
     df = pd.DataFrame(series)
     df.index.name = "period_end"
+    # 10-Ks also report quarterly balance-sheet snapshots tagged fp=FY; a true
+    # fiscal-year-end row must carry at least one full-year flow observation
+    # (duration tags are already filtered to ~365-day windows above)
+    flow_cols = [c for c in DURATION_TAGS if c in df.columns]
+    if flow_cols:
+        df = df[df[flow_cols].notna().any(axis=1)]
     return df.sort_index()
 
 
