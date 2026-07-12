@@ -87,6 +87,28 @@ def ticker_to_cik(ticker: str) -> int:
     raise KeyError(f"ticker {ticker!r} not found in SEC mapping")
 
 
+def fetch_submissions(cik: int, refresh: bool = False) -> dict:
+    """Fetch (and cache) the submissions index (filings, SIC code) for one issuer."""
+    cache = CACHE_DIR / "submissions" / f"CIK{cik:010d}.json"
+    if cache.exists() and not refresh:
+        return json.loads(cache.read_text())
+    doc = _get(f"{BASE}/submissions/CIK{cik:010d}.json").json()
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(doc))
+    return doc
+
+
+def fetch_submissions_page(name: str, refresh: bool = False) -> dict:
+    """Fetch (and cache) an archived submissions page referenced by the index."""
+    cache = CACHE_DIR / "submissions" / name
+    if cache.exists() and not refresh:
+        return json.loads(cache.read_text())
+    doc = _get(f"{BASE}/submissions/{name}").json()
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(doc))
+    return doc
+
+
 def fetch_companyfacts(cik: int, refresh: bool = False) -> dict:
     """Fetch (and cache) the full companyfacts document for one issuer."""
     cache = CACHE_DIR / f"CIK{cik:010d}.json"

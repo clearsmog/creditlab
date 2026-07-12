@@ -14,18 +14,17 @@ from __future__ import annotations
 
 import pandas as pd
 
-from creditlab.data.edgar import BASE, _get
+from creditlab.data.edgar import fetch_submissions, fetch_submissions_page
 
 ITEM_BANKRUPTCY = "1.03"
 
 
 def _filing_frames(cik: int) -> list[pd.DataFrame]:
     """All filing-index frames for an issuer (recent + archived pages)."""
-    doc = _get(f"{BASE}/submissions/CIK{cik:010d}.json").json()
+    doc = fetch_submissions(cik)
     frames = [pd.DataFrame(doc["filings"]["recent"])]
     for extra in doc["filings"].get("files", []):
-        older = _get(f"{BASE}/submissions/{extra['name']}").json()
-        frames.append(pd.DataFrame(older))
+        frames.append(pd.DataFrame(fetch_submissions_page(extra["name"])))
     return frames
 
 
