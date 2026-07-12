@@ -155,6 +155,27 @@ def _annual_observations(facts: dict, tag: str, duration: bool) -> pd.Series:
     return df["val"]
 
 
+def _raw_series(facts: dict, tag: str) -> pd.Series:
+    """Every reported value for a tag (no FY/form filter), latest filed per end date."""
+    node = facts.get("facts", {}).get("us-gaap", {}).get(tag) or facts.get(
+        "facts", {}
+    ).get("dei", {}).get(tag)
+    if node is None:
+        return pd.Series(dtype="float64")
+    rows = [
+        (v["end"], v.get("filed", ""), float(v["val"]))
+        for unit_values in node["units"].values()
+        for v in unit_values
+        if v.get("val") is not None and "end" in v
+    ]
+    if not rows:
+        return pd.Series(dtype="float64")
+    df = pd.DataFrame(rows, columns=["end", "filed", "val"])
+    df = df.sort_values("filed").groupby("end").last()
+    df.index = pd.to_datetime(df.index)
+    return df["val"].sort_index()
+
+
 def annual_record(facts: dict) -> pd.DataFrame:
     """Assemble all concepts into one firm-level annual DataFrame (index: period end)."""
     series = {}
@@ -175,7 +196,24 @@ def annual_record(facts: dict) -> pd.DataFrame:
     flow_cols = [c for c in DURATION_TAGS if c in df.columns]
     if flow_cols:
         df = df[df[flow_cols].notna().any(axis=1)]
-    return df.sort_index()
+    df = df.sort_index()
+
+    # dei cover-page share counts don't align with fiscal ends; fill gaps by
+    # nearest reported value within 180 days of each fiscal year end
+    raw_shares = _raw_series(facts, "EntityCommonStockSharesOutstanding")
+    if not raw_shares.empty and df["shares_outstanding"].isna().any():
+        for end in df.index[df["shares_outstanding"].isna()]:
+            gaps = (raw_shares.index - end).map(abs)
+            if gaps.min() <= pd.Timedelta(days=180):
+                df.loc[end, "shares_outstanding"] = raw_shares.iloc[gaps.argmin()]
+    # dual-class issuers (e.g. Ford) report no undimensioned point-in-time
+    # count; full-year weighted-average basic shares is a close proxy
+    if df["shares_outstanding"].isna().any():
+        wavg = _annual_observations(
+            facts, "WeightedAverageNumberOfSharesOutstandingBasic", duration=True
+        )
+        df["shares_outstanding"] = df["shares_outstanding"].combine_first(wavg)
+    return df
 
 
 def build_panel(tickers: list[str]) -> pd.DataFrame:

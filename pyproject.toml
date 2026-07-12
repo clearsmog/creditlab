@@ -17,6 +17,7 @@ dependencies = [
     "statsmodels>=0.14.6",
     "streamlit>=1.59.1",
     "xgboost>=3.3.0",
+    "yfinance>=1.5.1",
 ]
 
 [project.scripts]
