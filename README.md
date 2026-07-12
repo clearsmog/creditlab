@@ -1,0 +1,71 @@
+# CreditLab
+
+An end-to-end corporate credit risk platform: PD/LGD/EAD modeling from real corporate
+financial data, IFRS 9 ECL, structural models, portfolio credit risk simulation, and an
+interactive dashboard.
+
+Built by an FRM charterholder as a working demonstration of the full credit risk model
+lifecycle — development, calibration, and validation — following industry practice
+(scorecard development standards, IFRS 9 methodology, SR 11-7 / PRA-style validation).
+
+## Architecture
+
+```
+data sources (WRDS Compustat/CRSP, Refinitiv, ratings & default events)
+        |
+        v
+[1] data pipeline ──> firm-year panel with ratios + default/rating events
+        |
+        v
+[2] PD models ─────> Altman Z benchmark │ logistic scorecard │ ML challenger + SHAP
+        |
+        v
+[3] structural ────> Merton / KMV distance-to-default (market-implied PD)
+        |
+        v
+[4] ratings layer ─> master scale mapping │ transition matrices │ LGD assumptions
+        |
+        v
+[5] portfolio ─────> Vasicek / CreditMetrics Monte Carlo │ economic capital │ IFRS 9 ECL + stress
+        |
+        v
+[6] dashboard ─────> Streamlit: portfolio view, loss distributions, firm drill-down
+```
+
+## Package layout
+
+| Module | Contents |
+|---|---|
+| `creditlab.data` | Data ingestion, panel construction, ratio engineering |
+| `creditlab.models` | PD models (scorecard, ML challenger), Merton/KMV, validation metrics |
+| `creditlab.portfolio` | Transition matrices, Vasicek/CreditMetrics simulation, economic capital |
+| `creditlab.ecl` | IFRS 9 staging, PD term structures, scenario-weighted ECL, stress testing |
+| `creditlab.viz` | Reusable Plotly chart builders for the dashboard and reports |
+
+## Roadmap
+
+- [ ] **Phase 1 — Data pipeline**: Compustat/CRSP firm-year panel, default and rating
+      events, financial ratio engineering
+- [ ] **Phase 2 — PD models**: Altman Z benchmark, WoE/IV logistic scorecard, gradient
+      boosting challenger with SHAP; full validation suite (AUC/Gini, calibration,
+      out-of-time stability)
+- [ ] **Phase 3 — Structural models**: Merton distance-to-default; market-implied vs
+      fundamentals-based PD comparison
+- [ ] **Phase 4 — Ratings layer**: PD-to-rating master scale, transition matrices,
+      LGD from rating agency default studies
+- [ ] **Phase 5 — Portfolio risk**: Vasicek single-factor and CreditMetrics Monte Carlo
+      loss distribution, economic capital, IFRS 9 ECL with macro scenario weighting
+- [ ] **Phase 6 — Dashboard**: interactive Streamlit app
+- [ ] **Phase 7 (optional) — Counterparty risk**: CVA/PFE demo via ORE Python bindings
+
+## Data licensing
+
+WRDS / Refinitiv / Bloomberg license terms prohibit redistributing raw data. This repo
+ships code and a small synthetic sample dataset only; results shown in the dashboard and
+write-ups are generated from licensed data that is not included.
+
+## Setup
+
+```sh
+uv sync
+```

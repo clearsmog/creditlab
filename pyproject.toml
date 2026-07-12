@@ -1,0 +1,24 @@
+[project]
+name = "creditlab"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "clearsmog", email = "zqkntu@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5.1",
+    "pandas>=3.0.3",
+    "plotly>=6.9.0",
+    "scikit-learn>=1.9.0",
+    "statsmodels>=0.14.6",
+    "streamlit>=1.59.1",
+]
+
+[project.scripts]
+creditlab = "creditlab:main"
+
+[build-system]
+requires = ["uv_build>=0.9.10,<0.10.0"]
+build-backend = "uv_build"
