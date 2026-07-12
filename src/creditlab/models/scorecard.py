@@ -98,6 +98,21 @@ class Scorecard:
         return pd.DataFrame(rows).sort_values("iv", ascending=False)
 
 
+def calibrate_pds(p: np.ndarray, sample_rate: float, target_rate: float) -> np.ndarray:
+    """Prior correction for a defaulter-oversampled development sample.
+
+    The FTS defaulter harvest inflates the panel default rate far above the
+    population's. Oversampling shifts only the logistic intercept (King &
+    Zeng 2001), so ranking is untouched and the fix is an odds rescaling:
+    each PD's odds are multiplied by (target odds / sample odds). The target
+    central tendency should come from agency default studies (Phase 4).
+    """
+    odds = p / (1 - p)
+    ratio = (target_rate / (1 - target_rate)) / (sample_rate / (1 - sample_rate))
+    adj = odds * ratio
+    return adj / (1 + adj)
+
+
 def main() -> None:
     from sklearn.metrics import roc_auc_score  # oracle for the hand-rolled AUC
 

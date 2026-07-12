@@ -59,6 +59,22 @@ def cap_curve(y: np.ndarray, score: np.ndarray) -> tuple[np.ndarray, np.ndarray]
     return population, captured
 
 
+def psi(expected: np.ndarray, actual: np.ndarray, n_bins: int = 10) -> float:
+    """Population Stability Index between two score distributions.
+
+    Deciles are cut on the *expected* (development) distribution, then both
+    samples are compared bin by bin: PSI = sum((a - e) * ln(a / e)).
+    Rule of thumb: <0.10 stable, 0.10-0.25 monitor, >0.25 shifted.
+    """
+    expected, actual = np.asarray(expected, float), np.asarray(actual, float)
+    edges = np.unique(np.quantile(expected, np.linspace(0, 1, n_bins + 1)[1:-1]))
+    k = len(edges) + 1
+    e = np.bincount(np.digitize(expected, edges), minlength=k) / len(expected)
+    a = np.bincount(np.digitize(actual, edges), minlength=k) / len(actual)
+    e, a = np.maximum(e, 1e-6), np.maximum(a, 1e-6)  # empty-bin guard
+    return float(((a - e) * np.log(a / e)).sum())
+
+
 def accuracy_ratio(y: np.ndarray, score: np.ndarray) -> float:
     """AR = area between model CAP and random, over the same for the perfect model."""
     y = np.asarray(y, int)
