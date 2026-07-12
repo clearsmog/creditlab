@@ -11,7 +11,8 @@ lifecycle — development, calibration, and validation — following industry pr
 ## Architecture
 
 ```
-data sources (WRDS Compustat/CRSP, Refinitiv, ratings & default events)
+data sources (SEC EDGAR fundamentals, CRSP/WRDS market data,
+              S&P/Moody's published default & transition studies)
         |
         v
 [1] data pipeline ──> firm-year panel with ratios + default/rating events
@@ -44,15 +45,18 @@ data sources (WRDS Compustat/CRSP, Refinitiv, ratings & default events)
 
 ## Roadmap
 
-- [ ] **Phase 1 — Data pipeline**: Compustat/CRSP firm-year panel, default and rating
-      events, financial ratio engineering
-- [ ] **Phase 2 — PD models**: Altman Z benchmark, WoE/IV logistic scorecard, gradient
-      boosting challenger with SHAP; full validation suite (AUC/Gini, calibration,
-      out-of-time stability)
+- [ ] **Phase 1 — Data pipeline**: firm-year panel from SEC EDGAR XBRL fundamentals
+      (license-clean, fully reproducible) enriched privately with WRDS Compustat/CRSP;
+      default and rating events; financial ratio engineering
+- [ ] **Phase 2 — PD models**: Altman Z benchmark, WoE/IV logistic scorecard
+      (OptBinning/skorecard), gradient boosting challenger with SHAP, survival-analysis
+      lifetime PD; full validation suite (AUC/Gini/KS/CAP, calibration tests, PSI
+      out-of-time stability) with an SR 11-7-style validation report per model
 - [ ] **Phase 3 — Structural models**: Merton distance-to-default; market-implied vs
       fundamentals-based PD comparison
-- [ ] **Phase 4 — Ratings layer**: PD-to-rating master scale, transition matrices,
-      LGD from rating agency default studies
+- [ ] **Phase 4 — Ratings layer**: PD-to-rating master scale, transition matrices
+      calibrated to S&P/Moody's published default & transition studies, LGD from rating
+      agency recovery data
 - [ ] **Phase 5 — Portfolio risk**: Vasicek single-factor and CreditMetrics Monte Carlo
       loss distribution, economic capital, IFRS 9 ECL with macro scenario weighting
 - [ ] **Phase 6 — Dashboard**: interactive Streamlit app
@@ -60,9 +64,14 @@ data sources (WRDS Compustat/CRSP, Refinitiv, ratings & default events)
 
 ## Data licensing
 
-WRDS / Refinitiv / Bloomberg license terms prohibit redistributing raw data. This repo
-ships code and a small synthetic sample dataset only; results shown in the dashboard and
-write-ups are generated from licensed data that is not included.
+The primary fundamentals source is the SEC EDGAR XBRL API — free and license-clean, so
+the pipeline is fully reproducible by anyone. WRDS (Compustat/CRSP) is used only as
+private enrichment: license terms prohibit redistributing raw or reconstructable data, so
+this repo publishes code plus aggregate results only. Refinitiv/LSEG academic data is
+deliberately not used — its academic license excludes employment-related use and limits
+redistribution. Transition matrices and default-rate calibration come from S&P/Moody's
+publicly published annual default & transition studies, which are citable without
+restriction. See `docs/RESEARCH.md` for details.
 
 ## Setup
 
