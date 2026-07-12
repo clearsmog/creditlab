@@ -52,7 +52,7 @@ DURATION_TAGS = {
         "RevenueFromContractWithCustomerExcludingAssessedTax",
         "SalesRevenueNet",
     ],
-    "net_income": ["NetIncomeLoss"],
+    "net_income": ["NetIncomeLoss", "ProfitLoss"],
     "ebit": ["OperatingIncomeLoss"],
     "interest_expense": ["InterestExpense", "InterestExpenseDebt", "InterestExpenseNonoperating"],
     "cfo": ["NetCashProvidedByUsedInOperatingActivities"],
@@ -169,5 +169,9 @@ def build_panel(tickers: list[str]) -> pd.DataFrame:
     # period ends, which creates spurious rows; a firm-year without total
     # assets is not a usable balance-sheet observation.
     panel = panel.dropna(subset=["assets"]).reset_index(drop=True)
+    # some issuers never report total Liabilities; recover it from the
+    # accounting identity when equity is available
+    derived = panel["assets"] - panel["equity"]
+    panel["liabilities"] = panel["liabilities"].fillna(derived)
     panel["fyear"] = panel["period_end"].dt.year
     return panel
