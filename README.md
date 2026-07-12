@@ -64,12 +64,14 @@ data sources (SEC EDGAR fundamentals, CRSP/WRDS market data,
 
 ## Data licensing
 
-The primary fundamentals source is the SEC EDGAR XBRL API — free and license-clean, so
-the pipeline is fully reproducible by anyone. WRDS (Compustat/CRSP) is used only as
-private enrichment: license terms prohibit redistributing raw or reconstructable data, so
-this repo publishes code plus aggregate results only. Refinitiv/LSEG academic data is
-deliberately not used — its academic license excludes employment-related use and limits
-redistribution. Transition matrices and default-rate calibration come from S&P/Moody's
+Models are developed on licensed academic data (WRDS Compustat/CRSP primarily, with
+LSEG/Bloomberg where useful), accessed legitimately through a university subscription.
+License terms prohibit redistributing raw or reconstructable data, so this repo publishes
+code, methodology, and aggregate results only — never the underlying panel.
+
+For reproducibility, the pipeline also supports the SEC EDGAR XBRL API — free and
+license-clean — so anyone can run the full platform end-to-end on public data without a
+data subscription. Transition matrices and default-rate calibration come from S&P/Moody's
 publicly published annual default & transition studies, which are citable without
 restriction. See `docs/RESEARCH.md` for details.
 
