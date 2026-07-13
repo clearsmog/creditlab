@@ -16,6 +16,36 @@ Under the hood: SEC EDGAR firm-year panel, scorecard + ML PD models, Merton DtD,
 
 ---
 
+## Visual gallery
+
+Static charts exported from the models and desk tools (`uv run python scripts/export_gallery.py` → `docs/images/`).
+
+### Trading credit desk
+
+| Limit policy (demo grid) | Limit vs deal PFE |
+| --- | --- |
+| ![Limit grid by rating](docs/images/03-limit-grid.png) | ![Limit vs PFE](docs/images/04-limit-vs-pfe.png) |
+
+| Counterparty PD & leverage history | Safer vs weaker issuer profile |
+| --- | --- |
+| ![PD and leverage](docs/images/02-counterparty-pd-leverage.png) | ![Radar](docs/images/07-counterparty-radar.png) |
+
+### Credit lab
+
+| Issuers by internal rating | Portfolio loss distribution |
+| --- | --- |
+| ![Rating distribution](docs/images/01-rating-distribution.png) | ![Monte Carlo losses](docs/images/05-portfolio-loss.png) |
+
+<p align="center">
+  <img src="docs/images/06-transition-matrix.png" alt="One-year rating transition matrix" width="720" />
+</p>
+
+<p align="center"><em>One-year rating transition matrix (agency-style anchors)</em></p>
+
+Interactive versions live in the Streamlit app (`uv run streamlit run src/creditlab/dashboard.py`).
+
+---
+
 ## Why this shape (trading credit, not bank IRB)
 
 | Energy trading credit desk needs | CreditLab |
@@ -64,6 +94,15 @@ uv run streamlit run src/creditlab/dashboard.py
 
 ```sh
 uv run pytest -q
+```
+
+### Regenerate README images
+
+Requires a local firm-year panel at `data/processed/panel.parquet`:
+
+```sh
+uv run python scripts/export_gallery.py
+# writes docs/images/01-*.png … 07-*.png
 ```
 
 ---
