@@ -45,19 +45,19 @@ data sources (SEC EDGAR fundamentals, CRSP/WRDS market data,
 
 ## Roadmap
 
-- [ ] **Phase 1 — Data pipeline**: firm-year panel from SEC EDGAR XBRL fundamentals
+- [x] **Phase 1 — Data pipeline**: firm-year panel from SEC EDGAR XBRL fundamentals
       (license-clean, fully reproducible) enriched privately with WRDS Compustat/CRSP;
       default and rating events; financial ratio engineering
-- [ ] **Phase 2 — PD models**: Altman Z benchmark, WoE/IV logistic scorecard
+- [x] **Phase 2 — PD models**: Altman Z benchmark, WoE/IV logistic scorecard
       (OptBinning/skorecard), gradient boosting challenger with SHAP, survival-analysis
       lifetime PD; full validation suite (AUC/Gini/KS/CAP, calibration tests, PSI
       out-of-time stability) with an SR 11-7-style validation report per model
-- [ ] **Phase 3 — Structural models**: Merton distance-to-default; market-implied vs
+- [x] **Phase 3 — Structural models**: Merton distance-to-default; market-implied vs
       fundamentals-based PD comparison
-- [ ] **Phase 4 — Ratings layer**: PD-to-rating master scale, transition matrices
+- [x] **Phase 4 — Ratings layer**: PD-to-rating master scale, transition matrices
       calibrated to S&P/Moody's published default & transition studies, LGD from rating
       agency recovery data
-- [ ] **Phase 5 — Portfolio risk**: Vasicek single-factor and CreditMetrics Monte Carlo
+- [x] **Phase 5 — Portfolio risk**: Vasicek single-factor and CreditMetrics Monte Carlo
       loss distribution, economic capital, IFRS 9 ECL with macro scenario weighting
 - [ ] **Phase 6 — Dashboard**: interactive Streamlit app
 - [ ] **Phase 7 (optional) — Counterparty risk**: CVA/PFE demo via ORE Python bindings
