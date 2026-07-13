@@ -59,7 +59,8 @@ data sources (SEC EDGAR fundamentals, CRSP/WRDS market data,
       agency recovery data
 - [x] **Phase 5 — Portfolio risk**: Vasicek single-factor and CreditMetrics Monte Carlo
       loss distribution, economic capital, IFRS 9 ECL with macro scenario weighting
-- [ ] **Phase 6 — Dashboard**: interactive Streamlit app
+- [x] **Phase 6 — Dashboard**: interactive Streamlit app
+      (`uv run streamlit run src/creditlab/dashboard.py`)
 - [ ] **Phase 7 (optional) — Counterparty risk**: CVA/PFE demo via ORE Python bindings
 
 ## Data
