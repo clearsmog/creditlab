@@ -2,8 +2,9 @@
 
 Stage allocation and measurement:
   Stage 1 (performing):        12-month ECL
-  Stage 2 (SICR):              lifetime ECL — trigger here is a >= 3 notch
-                               downgrade since origination, or current CCC
+  Stage 2 (SICR):              lifetime ECL — trigger here is a downgrade of
+                               >= 2 whole grades since origination (roughly
+                               6 modifier notches), or current CCC
   Stage 3 (credit-impaired):   lifetime ECL on defaulted exposures
 
 Lifetime ECL sums discounted unconditional annual default probabilities
@@ -38,7 +39,7 @@ NOTCHES = {g: i for i, g in enumerate(GRADES)}
 def stage_of(rating_now: str, rating_orig: str, defaulted: bool = False) -> int:
     if defaulted:
         return 3
-    sicr = NOTCHES[rating_now] - NOTCHES[rating_orig] >= 3 or rating_now == "CCC"
+    sicr = NOTCHES[rating_now] - NOTCHES[rating_orig] >= 2 or rating_now == "CCC"
     return 2 if sicr else 1
 
 
