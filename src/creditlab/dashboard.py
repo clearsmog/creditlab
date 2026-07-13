@@ -1,7 +1,8 @@
-"""CreditLab dashboard.
+"""CreditLab dashboard — trading-credit desk + full corporate credit lab.
 
 Run:  uv run streamlit run src/creditlab/dashboard.py
-Pages are addressable via ?page=<overview|portfolio|transitions|ifrs9|firm>.
+Pages: ?page=<desk|firm|overview|portfolio|transitions|ifrs9>
+Default: desk (FO-facing counterparty limit workflow).
 """
 
 from __future__ import annotations
@@ -11,6 +12,9 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from creditlab.counterparty.exposure import headroom, pfe_addon
+from creditlab.counterparty.limits import recommend_limit
+from creditlab.counterparty.memo import format_credit_memo
 from creditlab.ecl.engine import SCENARIOS, ecl, stage_of, weighted_ecl
 from creditlab.models.scorecard import Scorecard, calibrate_pds
 from creditlab.portfolio.ratings import GRADES, assign_rating
@@ -192,7 +196,7 @@ def page_firm(a: dict) -> None:
     st.subheader("Firm explorer")
     panel = a["panel"]
     tickers = sorted(t for t in panel["ticker"].unique() if t)
-    ticker = st.selectbox("issuer", tickers)
+    ticker = st.selectbox("issuer", tickers, key="firm_ticker")
     firm = panel[panel["ticker"] == ticker].sort_values("period_end")
     last = firm.iloc[-1]
 
@@ -225,21 +229,99 @@ def page_firm(a: dict) -> None:
     st.plotly_chart(themed(fig, 300), use_container_width=True)
 
 
+def page_desk(a: dict) -> None:
+    """Trading-credit workflow: FS → PD/rating → limit → FO memo → pre-deal check."""
+    st.subheader("Trading credit desk")
+    st.caption(
+        "Counterparty assessment for energy-merchant style credit: financial statements → "
+        "internal rating / PD → proposed unsecured limit, documentation pack, and FO memo. "
+        "Limit grid is pedagogical — not a live house policy."
+    )
+
+    latest = a["latest"].dropna(subset=["ticker"]).copy()
+    latest = latest[latest["ticker"].astype(str).str.len() > 0]
+    tickers = sorted(latest["ticker"].unique())
+    default_ix = 0
+    for i, t in enumerate(tickers):
+        if t in ("XOM", "CVX", "BP", "SHEL", "TTE"):
+            default_ix = i
+            break
+    ticker = st.selectbox("Counterparty (issuer)", tickers, index=default_ix, key="desk_ticker")
+    row = latest[latest["ticker"] == ticker].iloc[0]
+    rec = recommend_limit(row, str(row["rating"]), float(row["pd_cal"]))
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Rating", rec.rating)
+    m2.metric("1y PD", f"{rec.pd_1y:.2%}")
+    m3.metric("Unsecured limit", f"${rec.recommended_limit_usd/1e6:.1f}m")
+    m4.metric("Max tenor", f"{rec.max_tenor_years:.1f}y")
+    m5.metric("KYC (demo)", rec.kyc_status.upper())
+
+    st.markdown("##### Ratio flags")
+    f1, f2, f3, f4 = st.columns(4)
+    f1.metric("Leverage", rec.ratio_flags.leverage)
+    f2.metric("Interest coverage", rec.ratio_flags.interest_coverage)
+    f3.metric("Current ratio", rec.ratio_flags.current_ratio)
+    f4.metric("ROA", rec.ratio_flags.roa)
+    if rec.ratio_flags.notes:
+        st.warning(" · ".join(rec.ratio_flags.notes))
+
+    st.markdown("##### Pre-deal exposure vs limit")
+    c1, c2, c3, c4 = st.columns(4)
+    notional = c1.number_input("Deal notional (USD)", value=10_000_000.0, step=1_000_000.0)
+    tenor = c2.number_input("Tenor (years)", value=1.0, min_value=0.1, max_value=10.0, step=0.25)
+    vol = c3.number_input("Commodity vol (annual)", value=0.35, min_value=0.05, max_value=1.5, step=0.05)
+    cur_exp = c4.number_input("Current exposure (USD)", value=0.0, step=500_000.0)
+    pfe = pfe_addon(notional, tenor, annual_vol=vol)
+    hr = headroom(rec.recommended_limit_usd, cur_exp, pfe)
+    e1, e2, e3 = st.columns(3)
+    e1.metric("PFE add-on", f"${pfe:,.0f}")
+    e2.metric("Post-deal utilisation", "n/a" if rec.recommended_limit_usd <= 0
+              else f"{hr['utilisation']:.0%}")
+    e3.metric("Headroom", f"${hr['headroom_usd']:,.0f}",
+              delta="BREACH" if hr["breach"] else "OK",
+              delta_color="inverse" if hr["breach"] else "normal")
+
+    st.markdown("##### Documentation pack")
+    for d in rec.documentation:
+        st.markdown(f"- {d}")
+
+    memo = format_credit_memo(
+        rec,
+        product="physical & financial gas / power / LNG hedges (demo)",
+        current_exposure_usd=cur_exp,
+        proposed_deal_pfe_usd=pfe,
+    )
+    st.markdown("##### FO credit memo")
+    st.markdown(memo)
+    st.download_button(
+        "Download memo (.md)",
+        data=memo,
+        file_name=f"credit_memo_{ticker}.md",
+        mime="text/markdown",
+    )
+
+
 PAGES = {
-    "overview": ("Overview", page_overview),
+    "desk": ("Trading credit desk", page_desk),
+    "firm": ("Firm explorer", page_firm),
+    "overview": ("Portfolio overview", page_overview),
     "portfolio": ("Portfolio risk", page_portfolio),
     "transitions": ("Transitions", lambda a: page_transitions()),
     "ifrs9": ("IFRS 9", page_ifrs9),
-    "firm": ("Firm explorer", page_firm),
 }
 
 
 def main() -> None:
-    st.set_page_config(page_title="CreditLab", layout="wide")
-    st.title("CreditLab — corporate credit risk")
+    st.set_page_config(page_title="CreditLab — Trading Credit", layout="wide")
+    st.title("CreditLab — trading credit desk")
+    st.caption(
+        "Primary path: counterparty FS analysis → limit recommendation → FO memo. "
+        "Lab modules (portfolio MC, IFRS 9, transitions) remain available in the sidebar."
+    )
 
     keys = list(PAGES)
-    default = st.query_params.get("page", "overview")
+    default = st.query_params.get("page", "desk")
     idx = keys.index(default) if default in keys else 0
     choice = st.sidebar.radio("Section", keys, index=idx,
                               format_func=lambda k: PAGES[k][0])

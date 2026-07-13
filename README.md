@@ -1,36 +1,111 @@
 # CreditLab
 
-End-to-end **corporate credit risk** platform: financial-statement panel construction, PD modeling (scorecard + ML challenger + Merton), ratings / LGD, portfolio credit risk, IFRS 9 ECL, and an interactive Streamlit dashboard.
+**Trading-credit desk toolkit** for energy / commodity markets, built on a full corporate credit lab.
 
-Built as a working demonstration of the credit model lifecycle — development, calibration, and validation — aligned with industry practice (scorecard standards, IFRS 9 methodology, model-validation hygiene).
+Primary workflow (matches energy-merchant **Credit Risk Analyst** work):
 
-> **Portfolio project.** Educational / research use. Not a production risk system and not investment advice.
+1. **Counterparty assessment** from financial statements (ratio flags + model PD / internal rating)  
+2. **Unsecured limit recommendation** (transparent rating grid + haircuts + max tenor)  
+3. **Documentation / KYC cues** (ISDA, CSA, PCG, monitoring intensity)  
+4. **Pre-deal check** — simple PFE-style add-on vs limit headroom  
+5. **FO credit memo** — plain-language opinion a trading desk can action  
+
+Under the hood: SEC EDGAR firm-year panel, scorecard + ML PD models, Merton DtD, ratings / transitions, portfolio Monte Carlo, and IFRS 9 ECL — available as lab modules.
+
+> **Portfolio project.** Educational / research use. Limit policy is pedagogical, not a live house methodology. Not investment advice.
 
 ---
 
-## Features
+## Why this shape (trading credit, not bank IRB)
 
-| Area | What it does |
+| Energy trading credit desk needs | CreditLab |
 | --- | --- |
-| **Data pipeline** | SEC EDGAR XBRL fundamentals → firm-year panel, financial ratios, default/rating labels |
-| **PD models** | Altman Z benchmark, WoE/IV logistic scorecard, gradient-boosting challenger, validation metrics (AUC/Gini/KS/calibration) |
-| **Structural PD** | Merton / KMV-style distance-to-default (market-implied PD) |
-| **Ratings & LGD** | Master-scale mapping, transition matrices (S&P/Moody’s published studies), recovery assumptions |
-| **Portfolio risk** | Vasicek / CreditMetrics-style Monte Carlo, loss distribution, economic capital intuition |
-| **IFRS 9 ECL** | Staging, scenario-weighted ECL, simple stress views |
-| **Dashboard** | Streamlit UI: portfolio overview, loss distribution, transitions, IFRS 9, firm explorer |
+| Analyse counterparties via financials → **limits** | Scorecard PD + ratio flags + limit engine |
+| FO partnership — clear yes / no / structure | FO memo generator |
+| Trading docs (ISDA, CSA, PCG) | Doc pack by risk grade |
+| Exposure vs limit (MtM / PFE intuition) | PFE add-on + headroom check |
+| KYC status discipline | Demo KYC traffic light (clear / review / escalate) |
+| Portfolio capital / IFRS 9 (secondary) | Lab pages still available |
 
 ---
 
-## Architecture
+## Quick start
+
+```sh
+git clone https://github.com/clearsmog/creditlab.git
+cd creditlab
+uv sync --group dev
+```
+
+### Trading credit desk (CLI)
+
+Requires local `data/processed/panel.parquet` (build via EDGAR pipeline, or use your existing panel):
+
+```sh
+uv run python -m creditlab.counterparty.desk
+uv run python -m creditlab.counterparty.desk --ticker XOM --notional 25000000 --tenor 1.5
+```
+
+### Dashboard (default page = Trading credit desk)
+
+```sh
+uv run streamlit run src/creditlab/dashboard.py
+```
+
+| Page | Purpose |
+| --- | --- |
+| **Trading credit desk** | Counterparty → limit → FO memo → pre-deal utilisation |
+| Firm explorer | Ratio & PD history |
+| Portfolio overview / risk | Book composition, Monte Carlo losses |
+| Transitions | S&P-style matrix & cumulative PDs |
+| IFRS 9 | Staging & scenario ECL (lab) |
+
+### Tests
+
+```sh
+uv run pytest -q
+```
+
+---
+
+## Trading-credit module
 
 ```
-data sources
-  SEC EDGAR fundamentals (+ optional private WRDS Compustat/CRSP)
-  S&P / Moody’s published default & transition studies
+src/creditlab/counterparty/
+├── limits.py      # ratio flags, rating→limit grid, doc packs
+├── exposure.py    # PFE add-on proxy, limit headroom
+├── memo.py        # FO-facing markdown memo
+└── desk.py        # CLI end-to-end demo
+```
+
+### Limit policy (demo)
+
+Transparent construction (replace with house policy in production):
+
+1. Map model **1y PD → rating grade** (S&P-anchored master scale)  
+2. **Base capacity** = min(equity × grade fraction, hard cap)  
+3. Apply **haircuts** from leverage / coverage / liquidity / ROA flags  
+4. Attach **max tenor** and **documentation pack** by grade  
+
+CCC / weak names → **no unsecured line** (prepay / LC / full CSA).
+
+### Pre-deal exposure (demo)
+
+```
+PFE_addon ≈ notional × σ × √T × z
+```
+
+Default σ = 35% (energy-ish placeholder). Use for *conversation*, not VaR sign-off.
+
+---
+
+## Architecture (full lab)
+
+```
+SEC EDGAR (+ optional private WRDS)
         │
         ▼
-[1] data pipeline ──► firm-year panel (ratios + events)
+[1] data pipeline ──► firm-year panel (ratios + default labels)
         │
         ▼
 [2] PD models ──────► Altman Z │ logistic scorecard │ ML challenger
@@ -39,150 +114,55 @@ data sources
 [3] structural ─────► Merton distance-to-default
         │
         ▼
-[4] ratings layer ──► master scale │ transitions │ LGD
+[4] ratings ────────► master scale │ transitions │ LGD
+        │
+        ├──────────────────────────────┐
+        ▼                              ▼
+[5a] TRADING DESK                 [5b] LAB
+  limits · docs · FO memo           portfolio MC · IFRS 9 ECL
+  PFE vs limit headroom
         │
         ▼
-[5] portfolio ──────► Vasicek / Monte Carlo │ economic capital │ IFRS 9 ECL
-        │
-        ▼
-[6] dashboard ──────► Streamlit (overview · portfolio · firm drill-down)
-```
-
----
-
-## Repository layout
-
-```
-Credit/
-├── src/creditlab/
-│   ├── data/          # EDGAR ingest, universe, ratios, labels
-│   ├── models/        # scorecard, challenger, Merton, metrics, binning
-│   ├── portfolio/     # ratings, transitions, LGD, Vasicek, simulation
-│   ├── ecl/           # IFRS 9 ECL engine
-│   ├── viz/           # chart helpers
-│   └── dashboard.py   # Streamlit app
-├── tests/             # pytest suite
-├── docs/              # research notes
-├── data/              # local only (gitignored): raw/ + processed/
-├── pyproject.toml
-└── README.md
+[6] Streamlit dashboard (desk-first navigation)
 ```
 
 | Package | Role |
 | --- | --- |
-| `creditlab.data` | Ingestion, panel construction, ratio engineering |
+| `creditlab.counterparty` | **Trading desk:** limits, exposure, FO memo |
+| `creditlab.data` | EDGAR ingest, panel, ratios, labels |
 | `creditlab.models` | PD models, Merton, validation metrics |
 | `creditlab.portfolio` | Transitions, simulation, economic capital |
-| `creditlab.ecl` | IFRS 9 staging & scenario-weighted ECL |
-| `creditlab.viz` | Plotly builders for dashboard / reports |
-
----
-
-## Requirements
-
-- Python **3.12+**
-- [`uv`](https://github.com/astral-sh/uv) (recommended)
-
-Raw EDGAR pulls need network access and a polite User-Agent (configured in the EDGAR client). Large caches live under `data/` and are **not** committed.
-
----
-
-## Setup
-
-```sh
-git clone https://github.com/clearsmog/creditlab.git
-cd creditlab
-uv sync
-```
-
-Install with dev/test tools:
-
-```sh
-uv sync --group dev
-```
-
----
-
-## Quick start
-
-### Run tests
-
-```sh
-uv run pytest -q
-```
-
-### Fit / demo individual modules
-
-Many modules expose a small `main()` for smoke demos:
-
-```sh
-uv run python -m creditlab.models.scorecard
-uv run python -m creditlab.models.challenger
-uv run python -m creditlab.models.merton
-uv run python -m creditlab.ecl.engine
-uv run python -m creditlab.portfolio.vasicek
-```
-
-### Streamlit dashboard
-
-```sh
-uv run streamlit run src/creditlab/dashboard.py
-```
-
-Pages (also via query string): `overview` · `portfolio` · `transitions` · `ifrs9` · `firm`
-
-Example: `http://localhost:8501/?page=firm`
-
-### Build / refresh the data panel
-
-Requires network for EDGAR (and optional WRDS credentials if you enrich privately):
-
-```sh
-uv run python -m creditlab.data.universe --help
-```
-
-Processed outputs are written under `data/processed/` (gitignored).
+| `creditlab.ecl` | IFRS 9 staging & scenario ECL |
+| `creditlab.viz` | Plotly helpers |
 
 ---
 
 ## Data & licensing
 
-| Source | Use in this project |
+| Source | Use |
 | --- | --- |
-| **SEC EDGAR XBRL API** | Primary, license-clean fundamentals backbone (public) |
-| **WRDS Compustat / CRSP** | Optional private enrichment (university license; **do not redistribute**) |
-| **S&P / Moody’s published default & transition studies** | Calibration references (public annual studies) |
+| **SEC EDGAR XBRL API** | Primary fundamentals (public, license-clean) |
+| **WRDS Compustat / CRSP** | Optional private enrichment — **do not redistribute** |
+| **S&P / Moody’s published studies** | Transition / default-rate anchors |
 
-- Raw and processed data under `data/` are **gitignored**.
-- Do not publish WRDS-derived reconstructable datasets.
-- Respect SEC fair-access etiquette (identify User-Agent; stay under rate limits).
+`data/raw/` and `data/processed/` are **gitignored**. Respect SEC rate limits and User-Agent rules.
 
 ---
 
 ## Roadmap
 
-- [x] **Phase 1** — Data pipeline (EDGAR firm-year panel, ratios, labels)
-- [x] **Phase 2** — PD models (scorecard, ML challenger, validation metrics)
-- [x] **Phase 3** — Structural models (Merton DtD)
-- [x] **Phase 4** — Ratings layer (master scale, transitions, LGD)
-- [x] **Phase 5** — Portfolio risk + IFRS 9 ECL
-- [x] **Phase 6** — Streamlit dashboard
-- [ ] **Phase 7 (optional)** — Counterparty credit demo (e.g. CVA/PFE via ORE)
-
----
-
-## Design notes
-
-- **Corporate** focus (fundamentals + structural PD), not a consumer-loan scorecard notebook.
-- **Champion / challenger**: interpretable scorecard + ML model with validation diagnostics.
-- **Reproducible core path** on public EDGAR data; optional private market data stays local.
-- Tests cover metrics, binning, EDGAR fixtures, Merton round-trips, portfolio helpers.
+- [x] Corporate panel + PD models + Merton + ratings  
+- [x] Portfolio MC + IFRS 9 ECL + dashboard  
+- [x] **Trading credit desk** (limits, PFE check, FO memo)  
+- [ ] Energy sector peer sets / commodity offtaker templates  
+- [ ] Optional CVA/PFE via ORE (true counterparty risk)  
+- [ ] Export limit blotter to CSV for “Credit Risk Cube”-style ops demos  
 
 ---
 
 ## Disclaimer
 
-This repository is for **learning, interview portfolio, and research illustration**. Model outputs are not credit ratings, not regulatory-approved methodologies, and must not be used for live lending, trading, or capital decisions without independent validation and governance.
+Illustrative only. Not a regulatory model, not a real credit decision, and not affiliated with SEFE or any trading house. Do not use for live lending, trading limits, or capital without independent validation and governance.
 
 ---
 
@@ -194,4 +174,4 @@ This repository is for **learning, interview portfolio, and research illustratio
 
 ## License
 
-No license file is attached yet. Treat as **all rights reserved** unless a `LICENSE` is added (e.g. MIT). Contact the author before commercial reuse.
+All rights reserved until a `LICENSE` file is added.
