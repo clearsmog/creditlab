@@ -73,8 +73,9 @@ Requires local `data/processed/panel.parquet` (build via EDGAR pipeline, or use 
 
 ```sh
 uv run python -m creditlab.counterparty.desk
-uv run python -m creditlab.counterparty.desk --ticker XOM --notional 25000000 --tenor 1.5
-uv run python -m creditlab.counterparty.desk --blotter limits.csv   # full-universe limit blotter
+uv run python -m creditlab.counterparty.desk --ticker KRP --notional 25000000 --tenor 1.5
+uv run python -m creditlab.counterparty.desk --blotter limits.csv          # full-universe limit blotter
+uv run python -m creditlab.counterparty.desk --offtaker municipal_utility  # unlisted-offtaker template, no panel needed
 ```
 
 ### Dashboard (default page = Trading credit desk)
@@ -115,6 +116,9 @@ src/creditlab/counterparty/
 ├── limits.py      # ratio flags, rating→limit grid, doc packs
 ├── exposure.py    # PFE add-on proxy, limit headroom
 ├── memo.py        # FO-facing markdown memo
+├── peers.py       # energy peer sets (SIC) + ratio percentile context
+├── offtakers.py   # unlisted-offtaker templates with shadow ratings
+├── blotter.py     # full-universe limit blotter → CSV
 └── desk.py        # CLI end-to-end demo
 ```
 
@@ -194,7 +198,7 @@ SEC EDGAR (+ optional private WRDS)
 - [x] Corporate panel + PD models + Merton + ratings  
 - [x] Portfolio MC + IFRS 9 ECL + dashboard  
 - [x] **Trading credit desk** (limits, PFE check, FO memo)  
-- [ ] Energy sector peer sets / commodity offtaker templates  
+- [x] Energy sector peer sets / commodity offtaker templates  
 - [ ] Optional CVA/PFE via ORE (true counterparty risk)  
 - [x] Export limit blotter to CSV for “Credit Risk Cube”-style ops demos  
 

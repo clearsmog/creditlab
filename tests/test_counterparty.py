@@ -10,6 +10,7 @@ from creditlab.counterparty.blotter import build_limit_blotter
 from creditlab.counterparty.exposure import headroom, pfe_addon
 from creditlab.counterparty.limits import assess_ratios, recommend_limit
 from creditlab.counterparty.memo import format_credit_memo
+from creditlab.counterparty.offtakers import OFFTAKER_TEMPLATES
 from creditlab.counterparty.peers import (
     peer_context_lines,
     peer_percentiles,
@@ -173,3 +174,26 @@ def test_blotter_csv_round_trip(tmp_path):
     assert np.allclose(
         back["recommended_limit_usd"], blotter["recommended_limit_usd"]
     )
+
+
+@pytest.mark.parametrize("key", sorted(OFFTAKER_TEMPLATES))
+def test_offtaker_templates_run_through_limit_policy(key):
+    template = OFFTAKER_TEMPLATES[key]
+    rec = recommend_limit(template.row(), template.shadow_rating, template.pd_1y)
+    assert rec.rating == template.shadow_rating
+    memo = format_credit_memo(rec)
+    assert template.label in memo
+
+
+def test_retail_supplier_gets_no_unsecured_line():
+    template = OFFTAKER_TEMPLATES["retail_supplier"]
+    rec = recommend_limit(template.row(), template.shadow_rating, template.pd_1y)
+    assert rec.kyc_status == "escalate"
+    assert rec.recommended_limit_usd < 1e6  # B-grade thin equity → de minimis
+
+
+def test_municipal_utility_rating_vs_ratio_tension():
+    template = OFFTAKER_TEMPLATES["municipal_utility"]
+    rec = recommend_limit(template.row(), template.shadow_rating, template.pd_1y)
+    assert rec.recommended_limit_usd > 0
+    assert rec.ratio_flags.haircut < 1.0  # strong rating, but ratios still bite

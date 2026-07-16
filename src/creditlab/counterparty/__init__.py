@@ -12,6 +12,7 @@ from creditlab.counterparty.limits import (
 )
 from creditlab.counterparty.memo import format_credit_memo
 from creditlab.counterparty.exposure import pfe_addon, headroom
+from creditlab.counterparty.offtakers import OFFTAKER_TEMPLATES, OfftakerTemplate
 from creditlab.counterparty.peers import (
     peer_context_lines,
     peer_percentiles,
@@ -20,6 +21,8 @@ from creditlab.counterparty.peers import (
 
 __all__ = [
     "LimitRecommendation",
+    "OFFTAKER_TEMPLATES",
+    "OfftakerTemplate",
     "assess_ratios",
     "build_limit_blotter",
     "recommend_limit",
