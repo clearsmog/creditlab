@@ -10,6 +10,11 @@ from creditlab.counterparty.blotter import build_limit_blotter
 from creditlab.counterparty.exposure import headroom, pfe_addon
 from creditlab.counterparty.limits import assess_ratios, recommend_limit
 from creditlab.counterparty.memo import format_credit_memo
+from creditlab.counterparty.peers import (
+    peer_context_lines,
+    peer_percentiles,
+    peer_set_for,
+)
 
 
 def _row(**kwargs) -> pd.Series:
@@ -113,6 +118,50 @@ def test_blotter_ccc_gets_zero_line():
     ccc = blotter[blotter["ticker"] == "CCC1"].iloc[0]
     assert ccc["recommended_limit_usd"] == 0.0
     assert ccc["kyc_status"] == "escalate"
+
+
+def test_peer_set_for_maps_energy_sics():
+    assert peer_set_for(1311.0) == "upstream_oil_gas"
+    assert peer_set_for(1321) == "upstream_oil_gas"
+    assert peer_set_for("1389") == "oilfield_services"
+    assert peer_set_for(2911) == "refining_marketing"
+    assert peer_set_for(4922) == "midstream_pipelines"
+    assert peer_set_for(4911) == "power_utilities"
+    assert peer_set_for(7372) is None
+    assert peer_set_for(np.nan) is None
+
+
+def _energy_universe() -> pd.DataFrame:
+    rows = [
+        _row(ticker=f"EP{i}", cik=100 + i, sic=1311.0, leverage=0.30 + 0.05 * i)
+        for i in range(5)
+    ]
+    rows.append(_row(ticker="UTIL", cik=200, sic=4911.0))
+    rows.append(_row(ticker="TECH", cik=300, sic=7372.0))
+    return pd.DataFrame(rows)
+
+
+def test_peer_percentiles_ranks_within_set_excluding_self():
+    uni = _energy_universe()
+    # EP4 has the highest leverage of the five upstream names
+    ctx = peer_percentiles(uni[uni["ticker"] == "EP4"].iloc[0], uni)
+    assert ctx["peer_set"] == "upstream_oil_gas"
+    assert ctx["n_peers"] == 4  # self excluded, UTIL/TECH not peers
+    assert ctx["percentiles"]["leverage"] == 1.0
+
+
+def test_peer_context_non_energy_skipped():
+    uni = _energy_universe()
+    lines = peer_context_lines(uni[uni["ticker"] == "TECH"].iloc[0], uni)
+    assert len(lines) == 1
+    assert "peer context skipped" in lines[0]
+
+
+def test_peer_context_lines_format():
+    uni = _energy_universe()
+    lines = peer_context_lines(uni[uni["ticker"] == "EP0"].iloc[0], uni)
+    assert "Upstream oil & gas" in lines[0]
+    assert any("leverage" in ln and "percentile" in ln for ln in lines[1:])
 
 
 def test_blotter_csv_round_trip(tmp_path):

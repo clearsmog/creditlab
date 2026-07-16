@@ -12,6 +12,11 @@ from creditlab.counterparty.limits import (
 )
 from creditlab.counterparty.memo import format_credit_memo
 from creditlab.counterparty.exposure import pfe_addon, headroom
+from creditlab.counterparty.peers import (
+    peer_context_lines,
+    peer_percentiles,
+    peer_set_for,
+)
 
 __all__ = [
     "LimitRecommendation",
@@ -21,4 +26,7 @@ __all__ = [
     "format_credit_memo",
     "pfe_addon",
     "headroom",
+    "peer_context_lines",
+    "peer_percentiles",
+    "peer_set_for",
 ]
