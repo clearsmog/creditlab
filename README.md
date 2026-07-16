@@ -120,7 +120,31 @@ src/creditlab/counterparty/
 ├── offtakers.py   # unlisted-offtaker templates with shadow ratings
 ├── blotter.py     # full-universe limit blotter → CSV
 └── desk.py        # CLI end-to-end demo
+
+src/creditlab/xva/
+├── configs.py     # minimal ORE input generation (curves, model, portfolio)
+├── runner.py      # OREApp execution + report parsing
+└── demo.py        # CLI: simulated CVA/PFE vs desk add-on proxy
 ```
+
+### CVA/PFE via ORE (optional)
+
+True counterparty risk on a synthetic gas netting set (forward + fixed-price
+swap): Monte Carlo exposure under an LGM × Schwartz cross-asset model via
+[ORE](https://www.opensourcerisk.org/), with the counterparty default curve
+implied from the CreditLab model PD (`λ = -ln(1 - PD₁ᵧ)`).
+
+```sh
+uv sync --extra xva                                  # installs open-source-risk-engine
+uv run python -m creditlab.xva.demo                  # synthetic counterparty (PD 2%)
+uv run python -m creditlab.xva.demo --ticker KRP     # PD from the scored panel
+uv run python -m creditlab.xva.demo --pd 0.05 --tenor 5
+```
+
+Prints T0 NPVs, the quarterly EPE/PFE95 profile, netting-set CVA, and a
+comparison of the simulated peak PFE against the desk's `σ√T` add-on proxy —
+the proxy gets the peak roughly right but says nothing about *when* exposure
+peaks or how it amortises.
 
 ### Limit policy (demo)
 
@@ -199,7 +223,7 @@ SEC EDGAR (+ optional private WRDS)
 - [x] Portfolio MC + IFRS 9 ECL + dashboard  
 - [x] **Trading credit desk** (limits, PFE check, FO memo)  
 - [x] Energy sector peer sets / commodity offtaker templates  
-- [ ] Optional CVA/PFE via ORE (true counterparty risk)  
+- [x] Optional CVA/PFE via ORE (true counterparty risk)  
 - [x] Export limit blotter to CSV for “Credit Risk Cube”-style ops demos  
 
 ---
