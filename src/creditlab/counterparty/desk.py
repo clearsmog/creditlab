@@ -2,6 +2,7 @@
 
   uv run python -m creditlab.counterparty.desk
   uv run python -m creditlab.counterparty.desk --ticker XOM
+  uv run python -m creditlab.counterparty.desk --blotter limits.csv
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import argparse
 
 import pandas as pd
 
+from creditlab.counterparty.blotter import build_limit_blotter
 from creditlab.counterparty.exposure import headroom, pfe_addon
 from creditlab.counterparty.limits import recommend_limit
 from creditlab.counterparty.memo import format_credit_memo
@@ -39,9 +41,26 @@ def main() -> None:
     parser.add_argument("--notional", type=float, default=10e6, help="illustrative deal notional USD")
     parser.add_argument("--tenor", type=float, default=1.0, help="deal tenor years")
     parser.add_argument("--current-exposure", type=float, default=0.0)
+    parser.add_argument(
+        "--blotter",
+        default="",
+        metavar="CSV",
+        help="export limit blotter for the full universe to CSV and exit",
+    )
     args = parser.parse_args()
 
     latest = load_scored_latest()
+    if args.blotter:
+        blotter = build_limit_blotter(latest)
+        blotter.to_csv(args.blotter, index=False)
+        n_lines = int((blotter["recommended_limit_usd"] > 0).sum())
+        total = blotter["recommended_limit_usd"].sum()
+        print(
+            f"wrote {len(blotter)} counterparties → {args.blotter} "
+            f"({n_lines} unsecured lines, total capacity ${total/1e6:,.0f}m)"
+        )
+        return
+
     if args.ticker:
         sub = latest[latest["ticker"].str.upper() == args.ticker.upper()]
         if sub.empty:

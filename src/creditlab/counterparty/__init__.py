@@ -4,6 +4,7 @@ Framed for energy-merchant / commodity-trading credit workflows (limits,
 documentation, pre-deal exposure vs limit) rather than bank IRB capital.
 """
 
+from creditlab.counterparty.blotter import build_limit_blotter
 from creditlab.counterparty.limits import (
     LimitRecommendation,
     assess_ratios,
@@ -15,6 +16,7 @@ from creditlab.counterparty.exposure import pfe_addon, headroom
 __all__ = [
     "LimitRecommendation",
     "assess_ratios",
+    "build_limit_blotter",
     "recommend_limit",
     "format_credit_memo",
     "pfe_addon",

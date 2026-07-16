@@ -74,6 +74,7 @@ Requires local `data/processed/panel.parquet` (build via EDGAR pipeline, or use 
 ```sh
 uv run python -m creditlab.counterparty.desk
 uv run python -m creditlab.counterparty.desk --ticker XOM --notional 25000000 --tenor 1.5
+uv run python -m creditlab.counterparty.desk --blotter limits.csv   # full-universe limit blotter
 ```
 
 ### Dashboard (default page = Trading credit desk)
@@ -195,7 +196,7 @@ SEC EDGAR (+ optional private WRDS)
 - [x] **Trading credit desk** (limits, PFE check, FO memo)  
 - [ ] Energy sector peer sets / commodity offtaker templates  
 - [ ] Optional CVA/PFE via ORE (true counterparty risk)  
-- [ ] Export limit blotter to CSV for “Credit Risk Cube”-style ops demos  
+- [x] Export limit blotter to CSV for “Credit Risk Cube”-style ops demos  
 
 ---
 
