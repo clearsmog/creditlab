@@ -122,6 +122,7 @@ src/creditlab/counterparty/
 └── desk.py        # CLI end-to-end demo
 
 src/creditlab/xva/
+├── marketdata.py  # synthetic market or real quotes (FRED + NYMEX NG)
 ├── configs.py     # minimal ORE input generation (curves, model, portfolio)
 ├── runner.py      # OREApp execution + report parsing
 └── demo.py        # CLI: simulated CVA/PFE vs desk add-on proxy
@@ -129,22 +130,31 @@ src/creditlab/xva/
 
 ### CVA/PFE via ORE (optional)
 
-True counterparty risk on a synthetic gas netting set (forward + fixed-price
-swap): Monte Carlo exposure under an LGM × Schwartz cross-asset model via
+True counterparty risk on a gas netting set (forward + fixed-price swap):
+Monte Carlo exposure under an LGM × Schwartz cross-asset model via
 [ORE](https://www.opensourcerisk.org/), with the counterparty default curve
 implied from the CreditLab model PD (`λ = -ln(1 - PD₁ᵧ)`).
 
 ```sh
 uv sync --extra xva                                  # installs open-source-risk-engine
-uv run python -m creditlab.xva.demo                  # synthetic counterparty (PD 2%)
-uv run python -m creditlab.xva.demo --ticker KRP     # PD from the scored panel
+uv run python -m creditlab.xva.demo                  # synthetic market, PD 2%
+uv run python -m creditlab.xva.demo --real --ticker KRP   # real market data
 uv run python -m creditlab.xva.demo --pd 0.05 --tenor 5
 ```
 
-Prints T0 NPVs, the quarterly EPE/PFE95 profile, netting-set CVA, and a
-comparison of the simulated peak PFE against the desk's `σ√T` add-on proxy —
-the proxy gets the peak roughly right but says nothing about *when* exposure
-peaks or how it amortises.
+Prints T0 NPVs, the quarterly EPE/PFE95 profile, netting-set CVA, and the
+simulated peak PFE against the desk's `σ√T` add-on proxy.
+
+`--real` swaps the synthetic market for free, keyless live data: US Treasury
+par yields (FRED) as the discount curve, the NYMEX Henry Hub futures strip
+(Yahoo Finance) as the forward curve, and realized vol from a year of
+front-month history — cached under `data/processed/`. The real seasonal curve
+produces a saw-tooth exposure profile (winter deliveries dominate), and with
+realized gas vol near 100% the desk proxy at its default 35% vol understates
+simulated peak PFE severalfold — the vol assumption dominates the model
+choice. Caveats: par yields are used directly as zeros, and front-month
+realized vol overstates long-dated vol (Samuelson effect), partly offset by
+the Schwartz mean reversion.
 
 ### Limit policy (demo)
 

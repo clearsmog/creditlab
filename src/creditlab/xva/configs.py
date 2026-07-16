@@ -19,22 +19,23 @@ import math
 from dataclasses import dataclass
 from datetime import date
 
-
-def _add_months(d: date, months: int) -> date:
-    y, m = divmod(d.month - 1 + months, 12)
-    y += d.year
-    m += 1
-    leap = y % 4 == 0 and (y % 100 != 0 or y % 400 == 0)
-    days = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-    return date(y, m, min(d.day, days[m - 1]))
-
+from creditlab.xva.marketdata import MarketData, _add_months, synthetic_market
 
 HAZARD_TENORS = ("1Y", "2Y", "3Y", "5Y", "7Y", "10Y")
 
 
+def _tenor_label(t: float) -> str:
+    return f"{int(round(t * 12))}M" if t < 1.0 else f"{int(round(t))}Y"
+
+
 @dataclass
 class XvaInputs:
-    """Parameters for one ORE CVA/PFE run (synthetic gas netting set)."""
+    """Parameters for one ORE CVA/PFE run (gas netting set).
+
+    Curve/vol content comes from ``market``; when omitted, a synthetic
+    market is built from the scalar parameters below. Pass
+    ``fetch_real_market()`` for live FRED/NYMEX data.
+    """
 
     counterparty: str = "CPTY"
     pd_1y: float = 0.02              # CreditLab model 1y PD → flat hazard rate
@@ -42,14 +43,28 @@ class XvaInputs:
     asof: date = date(2026, 7, 15)
     tenor_years: float = 3.0
     quantity_per_quarter: float = 250_000.0   # MMBtu per quarterly period
-    spot: float = 3.50                        # USD/MMBtu
-    contango: float = 0.02                    # forward curve drift per year
-    rate: float = 0.04                        # flat USD zero rate
-    sigma: float = 0.35                       # Schwartz commodity vol
+    spot: float = 3.50                        # synthetic-market USD/MMBtu
+    contango: float = 0.02                    # synthetic forward drift per year
+    rate: float = 0.04                        # synthetic flat USD zero rate
+    sigma: float = 0.35                       # synthetic Schwartz commodity vol
     kappa: float = 0.3                        # Schwartz mean reversion
     samples: int = 2000
     quantile: float = 0.95
     seed: int = 42
+    market: MarketData = None  # type: ignore[assignment]  # filled in __post_init__
+
+    def __post_init__(self) -> None:
+        if self.market is None:
+            self.market = synthetic_market(
+                self.asof,
+                spot=self.spot,
+                contango=self.contango,
+                rate=self.rate,
+                sigma=self.sigma,
+                horizon_years=self.tenor_years + 2,
+            )
+        else:
+            self.asof = self.market.asof
 
     @property
     def hazard_rate(self) -> float:
@@ -68,21 +83,14 @@ class XvaInputs:
         return f"{int(self.tenor_years * 4) + 4},3M"
 
     @property
-    def forward_dates(self) -> list[date]:
-        return [
-            _add_months(self.asof, 3 * i)
-            for i in range(1, int(self.tenor_years * 4) + 9)
-        ]
-
-    @property
     def fixed_price(self) -> float:
-        """Swap fixed price ~ATM against the mid-life forward."""
-        return self.spot * math.exp(self.contango * self.tenor_years / 2)
+        """Swap fixed price: fair (average) forward over the swap window."""
+        return self.market.average_forward(self.swap_start, self.end_date)
 
     @property
     def forward_strike(self) -> float:
         """Forward strike at the maturity-date forward (zero initial MtM)."""
-        return self.spot * math.exp(self.contango * self.tenor_years)
+        return self.market.forward_at(self.end_date)
 
 
 COM_CURVE = "GAS_USD"
@@ -91,18 +99,18 @@ COM_QUOTE = "GAS"
 
 
 def market_txt(p: XvaInputs) -> str:
+    md = p.market
     d = p.asof.strftime("%Y%m%d")
     lines = [
-        f"{d} ZERO/RATE/USD/USD-FLAT/A365/1Y {p.rate}",
-        f"{d} SWAPTION/RATE_NVOL/USD/1Y/1Y/ATM 0.0050",
-        f"{d} COMMODITY/PRICE/{COM_QUOTE}/USD {p.spot}",
+        f"{d} ZERO/RATE/USD/USD-FLAT/A365/{_tenor_label(t)} {r}"
+        for t, r in md.zeros
     ]
-    for fd in p.forward_dates:
-        t = (fd - p.asof).days / 365.0
-        px = p.spot * math.exp(p.contango * t)
+    lines.append(f"{d} SWAPTION/RATE_NVOL/USD/1Y/1Y/ATM 0.0050")
+    lines.append(f"{d} COMMODITY/PRICE/{COM_QUOTE}/USD {md.spot}")
+    for fd, px in md.forwards:
         lines.append(f"{d} COMMODITY_FWD/PRICE/{COM_QUOTE}/USD/{fd.isoformat()} {px:.4f}")
     for t in ("1Y", "5Y"):
-        lines.append(f"{d} COMMODITY_OPTION/RATE_LNVOL/{COM_QUOTE}/USD/{t}/ATM/AtmFwd {p.sigma}")
+        lines.append(f"{d} COMMODITY_OPTION/RATE_LNVOL/{COM_QUOTE}/USD/{t}/ATM/AtmFwd {md.sigma}")
     lines.append(f"{d} RECOVERY_RATE/RATE/{p.counterparty}/SR/USD {p.recovery}")
     for t in HAZARD_TENORS:
         lines.append(f"{d} HAZARD_RATE/RATE/{p.counterparty}/SR/USD/{t} {p.hazard_rate:.6f}")
@@ -156,9 +164,13 @@ def conventions_xml(p: XvaInputs) -> str:
 
 
 def curveconfig_xml(p: XvaInputs) -> str:
+    zero_quotes = "\n".join(
+        f"            <Quote>ZERO/RATE/USD/USD-FLAT/A365/{_tenor_label(t)}</Quote>"
+        for t, _ in p.market.zeros
+    )
     fwd_quotes = "\n".join(
         f"        <Quote>COMMODITY_FWD/PRICE/{COM_QUOTE}/USD/{fd.isoformat()}</Quote>"
-        for fd in p.forward_dates
+        for fd, _ in p.market.forwards
     )
     hz_quotes = "\n".join(
         f"        <Quote>HAZARD_RATE/RATE/{p.counterparty}/SR/USD/{t}</Quote>"
@@ -176,7 +188,7 @@ def curveconfig_xml(p: XvaInputs) -> str:
         <Direct>
           <Type>Zero</Type>
           <Quotes>
-            <Quote>ZERO/RATE/USD/USD-FLAT/A365/1Y</Quote>
+{zero_quotes}
           </Quotes>
           <Conventions>USD-ZERO-CONVENTIONS-TENOR-BASED</Conventions>
         </Direct>
@@ -465,7 +477,7 @@ def simulation_xml(p: XvaInputs) -> str:
         <CalibrationType>None</CalibrationType>
         <Sigma>
           <Calibrate>false</Calibrate>
-          <InitialValue>{p.sigma}</InitialValue>
+          <InitialValue>{p.market.sigma}</InitialValue>
         </Sigma>
         <Kappa>
           <Calibrate>false</Calibrate>

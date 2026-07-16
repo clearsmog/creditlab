@@ -1,7 +1,7 @@
 """CLI demo: simulated CVA/PFE for a gas netting set vs the desk PFE proxy.
 
-  uv run python -m creditlab.xva.demo                       # synthetic counterparty
-  uv run python -m creditlab.xva.demo --ticker KRP          # PD from CreditLab panel
+  uv run python -m creditlab.xva.demo                       # synthetic market
+  uv run python -m creditlab.xva.demo --real --ticker KRP   # FRED + NYMEX NG data
   uv run python -m creditlab.xva.demo --pd 0.05 --tenor 5   # stress a weak name
 """
 
@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 
 from creditlab.counterparty.exposure import pfe_addon
-from creditlab.xva import XvaInputs, run_xva
+from creditlab.xva import XvaInputs, fetch_real_market, run_xva
 
 
 def main() -> None:
@@ -20,8 +20,15 @@ def main() -> None:
     parser.add_argument("--recovery", type=float, default=0.4)
     parser.add_argument("--tenor", type=float, default=3.0, help="deal tenor in years")
     parser.add_argument("--quantity", type=float, default=250_000, help="MMBtu per quarter")
-    parser.add_argument("--sigma", type=float, default=0.35, help="commodity vol")
+    parser.add_argument(
+        "--sigma", type=float, default=0.35, help="commodity vol (synthetic market only)"
+    )
     parser.add_argument("--samples", type=int, default=2000, help="Monte Carlo paths")
+    parser.add_argument(
+        "--real",
+        action="store_true",
+        help="use FRED treasuries + NYMEX NG strip instead of the synthetic market",
+    )
     parser.add_argument("--keep", action="store_true", help="print work dir with ORE reports")
     args = parser.parse_args()
 
@@ -36,6 +43,7 @@ def main() -> None:
         row = sub.iloc[0]
         name, rating, pd_1y = str(row["ticker"]), str(row["rating"]), float(row["pd_cal"])
 
+    market = fetch_real_market() if args.real else None
     inputs = XvaInputs(
         counterparty=name,
         pd_1y=pd_1y,
@@ -44,15 +52,24 @@ def main() -> None:
         quantity_per_quarter=args.quantity,
         sigma=args.sigma,
         samples=args.samples,
+        market=market,
     )
+    md = inputs.market
     print(
         f"Counterparty {name} | rating {rating} | 1y PD {pd_1y:.2%} "
         f"→ flat hazard {inputs.hazard_rate:.4f}, recovery {args.recovery:.0%}"
     )
+    print(f"Market: {md.source}")
+    for note in md.notes:
+        print(f"  {note}")
+    print(
+        f"  gas spot {md.spot:.3f}, swap fair price {inputs.fixed_price:.3f}, "
+        f"vol {md.sigma:.0%}, USD 1y zero "
+        f"{dict(md.zeros).get(1.0, md.zeros[0][1]):.2%}"
+    )
     print(
         f"Netting set: gas forward + fixed-price swap, {args.tenor:.1f}y, "
-        f"{args.quantity:,.0f} MMBtu/quarter, sigma {args.sigma:.0%}, "
-        f"{args.samples} Sobol paths\n"
+        f"{args.quantity:,.0f} MMBtu/quarter, {args.samples} Sobol paths\n"
     )
 
     res = run_xva(inputs)
@@ -67,13 +84,19 @@ def main() -> None:
         print(f"  {r['Time']:>6.2f} {r['EPE']:>14,.0f} {r['PFE']:>14,.0f}")
 
     total_notional = float(res.npv["Notional(Base)"].sum())
-    proxy = pfe_addon(total_notional, args.tenor, annual_vol=args.sigma)
     print(f"\nCVA (simulated): ${res.cva:,.0f}")
     print(f"Peak EPE: ${res.peak_epe:,.0f} | Peak PFE95: ${res.peak_pfe:,.0f}")
+    proxy_mkt = pfe_addon(total_notional, args.tenor, annual_vol=md.sigma)
     print(
-        f"Desk add-on proxy on ${total_notional:,.0f} notional: ${proxy:,.0f} "
-        f"vs simulated peak PFE ${res.peak_pfe:,.0f}"
+        f"Desk add-on proxy on ${total_notional:,.0f} notional at market vol "
+        f"{md.sigma:.0%}: ${proxy_mkt:,.0f} vs simulated peak PFE ${res.peak_pfe:,.0f}"
     )
+    if abs(md.sigma - 0.35) > 0.01:
+        proxy_desk = pfe_addon(total_notional, args.tenor)
+        print(
+            f"Same proxy at the desk's default 35% vol: ${proxy_desk:,.0f} — "
+            f"the vol assumption dominates the model choice"
+        )
     if args.keep:
         print(f"\nORE inputs & reports: {res.work_dir}")
 

@@ -9,6 +9,14 @@ package is safe without it; only ``run_xva`` requires the bindings.
 """
 
 from creditlab.xva.configs import XvaInputs
+from creditlab.xva.marketdata import MarketData, fetch_real_market, synthetic_market
 from creditlab.xva.runner import XvaResults, run_xva
 
-__all__ = ["XvaInputs", "XvaResults", "run_xva"]
+__all__ = [
+    "MarketData",
+    "XvaInputs",
+    "XvaResults",
+    "fetch_real_market",
+    "run_xva",
+    "synthetic_market",
+]
