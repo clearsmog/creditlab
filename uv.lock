@@ -354,6 +354,11 @@ dependencies = [
     { name = "yfinance" },
 ]
 
+[package.optional-dependencies]
+xva = [
+    { name = "open-source-risk-engine" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
@@ -364,6 +369,7 @@ requires-dist = [
     { name = "kaleido", specifier = ">=1.3.0" },
     { name = "matplotlib", specifier = ">=3.11.0" },
     { name = "numpy", specifier = ">=2.5.1" },
+    { name = "open-source-risk-engine", marker = "extra == 'xva'", specifier = ">=1.8.16.0" },
     { name = "pandas", specifier = ">=3.0.3" },
     { name = "plotly", specifier = ">=6.9.0" },
     { name = "pyarrow", specifier = ">=25.0.0" },
@@ -374,6 +380,7 @@ requires-dist = [
     { name = "xgboost", specifier = ">=3.3.0" },
     { name = "yfinance", specifier = ">=1.5.1" },
 ]
+provides-extras = ["xva"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
@@ -929,6 +936,22 @@ source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8f/8c/554bb020501d6c04ad8127d83f728137f8f9123f991666efbdcf9095a221/nvidia_nccl_cu12-2.30.7-py3-none-manylinux_2_18_aarch64.whl", hash = "sha256:03ecd776fd1d58fd2c9a0a687dcf8db9ecd0057382dba646fa3d65786d4a9ea1", size = 303277471, upload-time = "2026-06-09T03:24:16.327Z" },
     { url = "https://files.pythonhosted.org/packages/50/32/e7ffa9c324ae260e5dbb4af2cd557bf7a8d155c8ac7b79a785fe1796fb92/nvidia_nccl_cu12-2.30.7-py3-none-manylinux_2_18_x86_64.whl", hash = "sha256:8ce1b8213f61f2bfac132e6df890af6450b77cbd140c6ce4e98cb0c2d8e678c9", size = 303361239, upload-time = "2026-06-09T03:24:53.816Z" },
+]
+
+[[package]]
+name = "open-source-risk-engine"
+version = "1.8.16.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4a/94/67b654303f693ab13d8aa194245993e8be111a76ede22f22e47786072473/open_source_risk_engine-1.8.16.0-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:74c660d521d9b73b4a947b3050b318ba477474d422f1d8df6f550042a8fffc9a", size = 61838178, upload-time = "2026-05-20T12:50:48.087Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/e7/502639287113afffbb4800b58a8c4eb680abf1f1578d4ee68510782170a7/open_source_risk_engine-1.8.16.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:cfb26ca506d88ac88b7069f6642392bb257844556bd79cc17235baf229348bf0", size = 73602721, upload-time = "2026-05-20T12:48:14.644Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/aa/7995a9ae3bd1eefdbd238776d03e8db5d4d6bf5dd0df225ce8b96b9d0e89/open_source_risk_engine-1.8.16.0-cp312-cp312-win_amd64.whl", hash = "sha256:8d319f08285b960709ac998a8c0829c9dd05cde50e335317d96b37200b39323e", size = 43417920, upload-time = "2026-05-20T12:46:49.783Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/e1/f517ae5fcb96674ef2337c9538dff2d96fc235809f4cb1c61a099a2fa630/open_source_risk_engine-1.8.16.0-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:334d99e4f4c3a312bba12ce5433631bb9641b2c1b4973f169225b073fd34efd4", size = 61808133, upload-time = "2026-05-20T12:50:54.031Z" },
+    { url = "https://files.pythonhosted.org/packages/fd/a1/f0b7bf00cde2521c32562796de0f6b842e4e8d2e83b177ff54d41af49ab6/open_source_risk_engine-1.8.16.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:0bfe06db8300662dbc72f61439c07449b0d90894a610213dfeec2451327dba38", size = 73603005, upload-time = "2026-05-20T12:48:24.048Z" },
+    { url = "https://files.pythonhosted.org/packages/2f/9f/fec9697e75aeac52266651e9c5dd6346ad07b6c3261a0adaf9c39be67874/open_source_risk_engine-1.8.16.0-cp313-cp313-win_amd64.whl", hash = "sha256:4917c9ddb4ec81a197bf83b47705950ac1bd143f0abaeee125ef6dbf6c56e0c9", size = 43418139, upload-time = "2026-05-20T12:47:00.353Z" },
+    { url = "https://files.pythonhosted.org/packages/df/ed/f9e678945dd0cc9656d6c9c3a3b4b035d8a8e302a389a9c325a55e8992f1/open_source_risk_engine-1.8.16.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:b06bd72920c0df0c911f49412b0f91ed38ed76f1ed542651b044090d735809ac", size = 61809222, upload-time = "2026-05-29T08:38:48.715Z" },
+    { url = "https://files.pythonhosted.org/packages/d0/f9/01210d59272ce56c5fe316ef10c133a4ace69f30522eeb8d290541cd2ec7/open_source_risk_engine-1.8.16.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:04e95bbb36d160eafb3a61d373ab7c5a5d04a2687f40b2c44494c1d20c1484df", size = 73613598, upload-time = "2026-06-03T12:58:06.258Z" },
+    { url = "https://files.pythonhosted.org/packages/34/bf/571337fe4106384b8e8ac78774d390f25bf2bf7de154eaf9ea27f9639db6/open_source_risk_engine-1.8.16.0-cp314-cp314-win_amd64.whl", hash = "sha256:804976b070eaaa7edcdf16203fd95a13fda80b1ae7ab5d57f329fef39178ef7e", size = 54975156, upload-time = "2026-06-03T12:58:17.301Z" },
 ]
 
 [[package]]
