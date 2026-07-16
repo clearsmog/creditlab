@@ -1,11 +1,24 @@
 """CreditLab dashboard — trading-credit desk + full corporate credit lab.
 
 Run:  uv run streamlit run src/creditlab/dashboard.py
-Pages: ?page=<desk|firm|overview|portfolio|transitions|ifrs9>
+Pages: ?page=<desk|xva|firm|overview|portfolio|transitions|ifrs9>
 Default: desk (FO-facing counterparty limit workflow).
 """
 
 from __future__ import annotations
+
+import os
+
+# pyarrow's bundled mimalloc segfaults in mi_thread_init when a late Streamlit
+# rerun thread first touches Arrow (macOS; seen with pyarrow 25.0). The C++
+# default pool reads this env var lazily on first allocation, which happens
+# after this script loads — so setting it here reliably pins the system
+# allocator for all Arrow marshalling.
+os.environ["ARROW_DEFAULT_MEMORY_POOL"] = "system"
+
+import pyarrow as _pa
+
+_pa.set_memory_pool(_pa.system_memory_pool())
 
 import numpy as np
 import pandas as pd
@@ -302,8 +315,130 @@ def page_desk(a: dict) -> None:
     )
 
 
+@st.cache_data(show_spinner="running ORE Monte Carlo…")
+def _run_xva_cached(cpty: str, pd_1y: float, recovery: float, tenor: float,
+                    quantity: float, samples: int, real: bool):
+    from creditlab.xva import XvaInputs, run_xva
+    from creditlab.xva.marketdata import fetch_real_market_isolated
+
+    # isolated variants: ORE and yfinance/curl_cffi native code must not load
+    # in the Streamlit process — rerun threads segfault (pyarrow mimalloc)
+    market = fetch_real_market_isolated() if real else None
+    return run_xva(XvaInputs(
+        counterparty=cpty, pd_1y=pd_1y, recovery=recovery, tenor_years=tenor,
+        quantity_per_quarter=quantity, samples=samples, market=market,
+    ), isolated=True)
+
+
+def page_xva(a: dict) -> None:
+    """Simulated counterparty exposure: EPE/PFE profile + CVA via ORE."""
+    st.subheader("XVA — simulated CVA / PFE (ORE)")
+    st.caption(
+        "Monte Carlo exposure on a gas netting set (forward + fixed-price swap) "
+        "under an LGM × Schwartz cross-asset model, with the counterparty default "
+        "curve implied from the CreditLab scorecard PD. Compare the simulated "
+        "profile against the desk's σ√T add-on proxy."
+    )
+    from importlib.util import find_spec
+
+    if find_spec("ORE") is None:
+        st.info("ORE bindings not installed — run `uv sync --extra xva` and restart.")
+        return
+
+    latest = a["latest"].dropna(subset=["ticker"]).copy()
+    latest = latest[latest["ticker"].astype(str).str.len() > 0]
+    tickers = sorted(latest["ticker"].unique())
+    c1, c2, c3, c4, c5 = st.columns(5)
+    ticker = c1.selectbox("Counterparty", tickers, key="xva_ticker")
+    tenor = c2.number_input("Tenor (years)", value=3.0, min_value=1.0, max_value=5.0, step=0.5)
+    quantity = c3.number_input("MMBtu / quarter", value=250_000.0, step=50_000.0)
+    samples = c4.selectbox("MC paths", [500, 1000, 2000, 5000], index=2)
+    real = c5.radio("Market data", ["synthetic", "real"], horizontal=True,
+                    help="real = FRED treasuries + NYMEX NG strip (network)") == "real"
+
+    row = latest[latest["ticker"] == ticker].iloc[0]
+    pd_1y = float(row["pd_cal"])
+
+    try:
+        res = _run_xva_cached(ticker, pd_1y, 0.4, tenor, quantity, int(samples), real)
+    except Exception as e:  # network or ORE failure — show, don't crash the app
+        st.error(f"XVA run failed: {e}")
+        return
+
+    md = res.inputs.market
+    st.caption(
+        f"Market: **{md.source}** · gas spot {md.spot:.3f} · swap fair price "
+        f"{res.inputs.fixed_price:.3f} · vol {md.sigma:.0%} · "
+        f"rating {row['rating']} · 1y PD {pd_1y:.2%} → hazard {res.inputs.hazard_rate:.4f}"
+    )
+
+    m = st.columns(4)
+    m[0].metric("CVA", f"${res.cva:,.0f}")
+    m[1].metric("Peak EPE", f"${res.peak_epe/1e6:.2f}m")
+    m[2].metric("Peak PFE 95%", f"${res.peak_pfe/1e6:.2f}m")
+    m[3].metric("T0 NPV (netting set)", f"${res.npv['NPV(Base)'].sum():,.0f}")
+
+    expo = res.exposure
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=expo["Time"], y=expo["PFE"], name="PFE 95%", mode="lines",
+        line=dict(color=YELLOW, width=2),
+        hovertemplate="%{x:.2f}y: $%{y:,.0f}<extra>PFE 95%</extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=expo["Time"], y=expo["EPE"], name="EPE", mode="lines",
+        line=dict(color=BLUE, width=2), fill="tozeroy",
+        fillcolor="rgba(42,120,214,0.15)",
+        hovertemplate="%{x:.2f}y: $%{y:,.0f}<extra>EPE</extra>",
+    ))
+    fig.update_layout(title="Exposure profile (netting set)",
+                      xaxis_title="time (years)", yaxis_title="exposure (USD)",
+                      legend=dict(orientation="h", y=1.08))
+    st.plotly_chart(themed(fig, 400), use_container_width=True)
+
+    left, right = st.columns(2)
+    fwd = pd.DataFrame(md.forwards, columns=["date", "price"])
+    fig = go.Figure(go.Scatter(
+        x=fwd["date"], y=fwd["price"], mode="lines+markers",
+        line=dict(color=AQUA, width=2), marker=dict(size=5),
+        hovertemplate="%{x|%b %Y}: $%{y:.3f}<extra></extra>",
+    ))
+    fig.add_hline(y=res.inputs.fixed_price, line_dash="dash", line_color=INK2,
+                  annotation_text=f"swap fixed {res.inputs.fixed_price:.3f}",
+                  annotation_font_color=INK2)
+    fig.update_layout(title="Gas forward curve", yaxis_title="USD/MMBtu",
+                      showlegend=False)
+    left.plotly_chart(themed(fig, 340), use_container_width=True)
+
+    total_notional = float(res.npv["Notional(Base)"].sum())
+    bars = [
+        ("simulated peak PFE", res.peak_pfe, BLUE),
+        (f"proxy @ market vol {md.sigma:.0%}",
+         pfe_addon(total_notional, tenor, annual_vol=md.sigma), AQUA),
+        ("proxy @ desk 35%", pfe_addon(total_notional, tenor), YELLOW),
+    ]
+    fig = go.Figure(go.Bar(
+        x=[b[0] for b in bars], y=[b[1] for b in bars],
+        marker_color=[b[2] for b in bars],
+        marker_line_color=SURFACE, marker_line_width=2,
+        text=[f"${b[1]/1e6:.1f}m" for b in bars], textposition="outside",
+        textfont=dict(color=INK2), hovertemplate="%{x}: $%{y:,.0f}<extra></extra>",
+    ))
+    fig.update_layout(title="Peak PFE: simulation vs σ√T add-on proxy",
+                      yaxis_title="USD", showlegend=False)
+    right.plotly_chart(themed(fig, 340), use_container_width=True)
+
+    st.caption(
+        "Real-data caveats: treasury par yields used directly as zeros; realized "
+        "front-month vol overstates long-dated vol (Samuelson effect), partly offset "
+        "by Schwartz mean reversion. The proxy misses profile timing and seasonality "
+        "even at the right vol."
+    )
+
+
 PAGES = {
     "desk": ("Trading credit desk", page_desk),
+    "xva": ("XVA — CVA/PFE", page_xva),
     "firm": ("Firm explorer", page_firm),
     "overview": ("Portfolio overview", page_overview),
     "portfolio": ("Portfolio risk", page_portfolio),

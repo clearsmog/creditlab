@@ -142,6 +142,10 @@ def _ng_tickers(asof: date, months: int) -> list[tuple[date, str]]:
     return out
 
 
+def _cache_path(asof: date, cache_dir: str) -> str:
+    return os.path.join(cache_dir, f"xva_market_{asof.strftime('%Y%m%d')}.json")
+
+
 def fetch_real_market(
     asof: date | None = None,
     *,
@@ -149,14 +153,16 @@ def fetch_real_market(
     cache_dir: str = "data/processed",
 ) -> MarketData:
     """Fetch treasuries (FRED), NG strip and realized vol (Yahoo), with cache."""
-    import requests
-    import yfinance as yf
-
     asof = asof or date.today()
-    cache_path = os.path.join(cache_dir, f"xva_market_{asof.strftime('%Y%m%d')}.json")
+    cache_path = _cache_path(asof, cache_dir)
     if os.path.exists(cache_path):
         with open(cache_path) as f:
             return MarketData.from_json(f.read())
+
+    # deferred: yfinance drags in curl_cffi, which hosts like Streamlit
+    # must never load in-process (see fetch_real_market_isolated)
+    import requests
+    import yfinance as yf
 
     curve_date, zeros = _parse_fred_csv(requests.get(FRED_URL, timeout=30).text)
 
@@ -198,3 +204,37 @@ def fetch_real_market(
     with open(cache_path, "w") as f:
         f.write(md.to_json())
     return md
+
+
+def fetch_real_market_isolated(
+    asof: date | None = None,
+    *,
+    months: int = 36,
+    cache_dir: str = "data/processed",
+) -> MarketData:
+    """Fetch via a subprocess so network libs never load in this process.
+
+    yfinance's curl_cffi (and other native deps) can corrupt allocator
+    thread-state in multi-threaded hosts — a Streamlit rerun after loading
+    it segfaulted inside pyarrow. The child fills the JSON cache; the
+    parent only reads it back with stdlib json.
+    """
+    import subprocess
+    import sys
+
+    asof = asof or date.today()
+    cache_path = _cache_path(asof, cache_dir)
+    if not os.path.exists(cache_path):
+        code = (
+            "from datetime import date\n"
+            "from creditlab.xva.marketdata import fetch_real_market\n"
+            f"fetch_real_market(date.fromisoformat({asof.isoformat()!r}), "
+            f"months={months}, cache_dir={cache_dir!r})\n"
+        )
+        proc = subprocess.run(
+            [sys.executable, "-c", code], capture_output=True, text=True
+        )
+        if not os.path.exists(cache_path):
+            raise RuntimeError(f"market data fetch failed: {proc.stderr.strip()[-400:]}")
+    with open(cache_path) as f:
+        return MarketData.from_json(f.read())

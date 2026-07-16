@@ -120,6 +120,15 @@ def test_run_produces_positive_cva_and_exposure(tmp_path):
 
 
 @needs_ore
+def test_run_isolated_subprocess_matches_shape(tmp_path):
+    from creditlab.xva import run_xva
+
+    res = run_xva(XvaInputs(**FAST), work_dir=str(tmp_path / "iso"), isolated=True)
+    assert res.cva > 0
+    assert res.peak_pfe > res.peak_epe > 0
+
+
+@needs_ore
 def test_cva_increases_with_pd(tmp_path):
     from creditlab.xva import run_xva
 
