@@ -119,6 +119,55 @@ def test_run_produces_positive_cva_and_exposure(tmp_path):
     assert abs(float(fwd["NPV(Base)"])) < 0.02 * float(fwd["Notional(Base)"])
 
 
+FIXTURE = "tests/fixtures/lseg_sample.json"
+
+
+def test_lseg_export_loads_market_and_cds():
+    from creditlab.xva.lseg import load_lseg_export
+
+    exp = load_lseg_export(FIXTURE)
+    assert exp.asof == date(2026, 7, 17)
+    assert exp.market.sigma == 0.62
+    assert len(exp.market.zeros) == 8
+    prices = dict(exp.market.forwards)
+    assert exp.market.spot == 2.85
+    q = exp.cds_for("oxy")  # case-insensitive
+    assert q is not None and q.recovery == 0.4
+    assert q.spreads[0] == (1.0, 0.0048)
+    assert exp.cds_for("ZZZ") is None
+    assert len(prices) == 20
+
+
+def test_lseg_export_rejects_unknown_version(tmp_path):
+    from creditlab.xva.lseg import load_lseg_export
+
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"version": 2}')
+    with pytest.raises(ValueError, match="version"):
+        load_lseg_export(str(bad))
+
+
+@needs_ore
+def test_lseg_sample_runs_through_ore(tmp_path):
+    from creditlab.xva import run_xva
+    from creditlab.xva.lseg import load_lseg_export
+
+    exp = load_lseg_export(FIXTURE)
+    res = run_xva(
+        XvaInputs(
+            counterparty="OXY",
+            market=exp.market,
+            cds_spreads=exp.cds_for("OXY").spreads,
+            recovery=exp.cds_for("OXY").recovery,
+            samples=300,
+            tenor_years=1.5,
+        ),
+        work_dir=str(tmp_path / "lseg"),
+    )
+    assert res.cva > 0
+    assert res.peak_pfe > res.peak_epe > 0
+
+
 @needs_ore
 def test_run_isolated_subprocess_matches_shape(tmp_path):
     from creditlab.xva import run_xva
