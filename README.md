@@ -157,6 +157,24 @@ choice. Caveats: par yields are used directly as zeros, and front-month
 realized vol overstates long-dated vol (Samuelson effect), partly offset by
 the Schwartz mean reversion.
 
+### LSEG Workspace / Codebook data (optional, university access)
+
+With LSEG Workspace access, run `notebooks/codebook_cds_pull.ipynb` inside
+**Codebook** to export a USD SOFR zero curve, NG settlement strip, vol, and
+single-name **CDS spread curves** as one JSON file; drop it in
+`data/processed/` and point the demo at it:
+
+```sh
+uv run python -m creditlab.xva.demo --cds-file data/processed/lseg_export_YYYYMMDD.json --ticker OXY
+# dry run without Workspace: --cds-file tests/fixtures/lseg_sample.json
+```
+
+When the counterparty has a CDS curve, ORE bootstraps a `SpreadCDS` default
+curve and the demo prints CVA twice — scorecard hazard (real-world model PD)
+vs CDS-implied (risk-neutral market pricing) — the model-vs-market gap that
+drives desk CVA. Exports are licensed for personal academic use: keep them in
+the gitignored `data/` tree, never in the repo.
+
 ### Limit policy (demo)
 
 Transparent construction (replace with house policy in production):

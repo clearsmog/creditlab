@@ -29,6 +29,13 @@ def main() -> None:
         action="store_true",
         help="use FRED treasuries + NYMEX NG strip instead of the synthetic market",
     )
+    parser.add_argument(
+        "--cds-file",
+        default="",
+        metavar="JSON",
+        help="LSEG Workspace export (codebook_cds_pull.ipynb): uses its market data "
+        "and, if the counterparty has a CDS curve, prints model-vs-market CVA",
+    )
     parser.add_argument("--keep", action="store_true", help="print work dir with ORE reports")
     args = parser.parse_args()
 
@@ -38,12 +45,25 @@ def main() -> None:
 
         latest = load_scored_latest()
         sub = latest[latest["ticker"].str.upper() == args.ticker.upper()]
-        if sub.empty:
+        if not sub.empty:
+            row = sub.iloc[0]
+            name, rating, pd_1y = str(row["ticker"]), str(row["rating"]), float(row["pd_cal"])
+        elif args.cds_file:
+            # CDS names are often large caps outside the modeling panel —
+            # keep going with the CLI PD as the model view
+            name = args.ticker.upper()
+            print(f"note: {name} not in panel — using --pd {args.pd:.2%} as model PD")
+        else:
             raise SystemExit(f"ticker {args.ticker!r} not in panel")
-        row = sub.iloc[0]
-        name, rating, pd_1y = str(row["ticker"]), str(row["rating"]), float(row["pd_cal"])
 
-    market = fetch_real_market() if args.real else None
+    lseg = None
+    if args.cds_file:
+        from creditlab.xva.lseg import load_lseg_export
+
+        lseg = load_lseg_export(args.cds_file)
+        market = lseg.market
+    else:
+        market = fetch_real_market() if args.real else None
     inputs = XvaInputs(
         counterparty=name,
         pd_1y=pd_1y,
@@ -97,6 +117,31 @@ def main() -> None:
             f"Same proxy at the desk's default 35% vol: ${proxy_desk:,.0f} — "
             f"the vol assumption dominates the model choice"
         )
+
+    if lseg is not None:
+        quote = lseg.cds_for(name)
+        if quote is None:
+            print(f"\nNo CDS curve for {name} in {args.cds_file} — model CVA only.")
+        else:
+            from dataclasses import replace
+
+            cds_res = run_xva(replace(
+                inputs, cds_spreads=quote.spreads, recovery=quote.recovery,
+            ))
+            spread_5y = dict(quote.spreads).get(5.0)
+            label = f"{spread_5y * 1e4:.0f}bp 5y" if spread_5y else f"{len(quote.spreads)} tenors"
+            print(f"\n--- model vs market default risk ({name}) ---")
+            row_model = f"CVA, scorecard hazard (1y PD {pd_1y:.2%}):"
+            row_cds = f"CVA, CDS-implied curve ({label}):"
+            w = max(len(row_model), len(row_cds)) + 2
+            print(f"{row_model:<{w}}${res.cva:,.0f}")
+            print(f"{row_cds:<{w}}${cds_res.cva:,.0f}")
+            ratio = res.cva / cds_res.cva if cds_res.cva > 0 else float("inf")
+            print(
+                f"ratio {ratio:.1f}x — real-world model PD vs risk-neutral market "
+                f"pricing; the gap is the desk's CVA story"
+            )
+
     if args.keep:
         print(f"\nORE inputs & reports: {res.work_dir}")
 
