@@ -317,16 +317,30 @@ def page_desk(a: dict) -> None:
 
 @st.cache_data(show_spinner="running ORE Monte Carlo…")
 def _run_xva_cached(cpty: str, pd_1y: float, recovery: float, tenor: float,
-                    quantity: float, samples: int, real: bool):
+                    quantity: float, samples: int, real: bool,
+                    lseg_path: str = "", use_cds: bool = False):
     from creditlab.xva import XvaInputs, run_xva
     from creditlab.xva.marketdata import fetch_real_market_isolated
 
     # isolated variants: ORE and yfinance/curl_cffi native code must not load
     # in the Streamlit process — rerun threads segfault (pyarrow mimalloc)
-    market = fetch_real_market_isolated() if real else None
+    cds_spreads = None
+    if lseg_path:
+        from creditlab.xva.lseg import load_lseg_export
+
+        exp = load_lseg_export(lseg_path)
+        market = exp.market
+        if use_cds:
+            quote = exp.cds_for(cpty)
+            if quote is None:
+                raise ValueError(f"no CDS curve for {cpty} in {lseg_path}")
+            cds_spreads, recovery = quote.spreads, quote.recovery
+    else:
+        market = fetch_real_market_isolated() if real else None
     return run_xva(XvaInputs(
         counterparty=cpty, pd_1y=pd_1y, recovery=recovery, tenor_years=tenor,
         quantity_per_quarter=quantity, samples=samples, market=market,
+        cds_spreads=cds_spreads,
     ), isolated=True)
 
 
@@ -347,30 +361,88 @@ def page_xva(a: dict) -> None:
 
     latest = a["latest"].dropna(subset=["ticker"]).copy()
     latest = latest[latest["ticker"].astype(str).str.len() > 0]
-    tickers = sorted(latest["ticker"].unique())
+    panel_tickers = sorted(latest["ticker"].unique())
+
     c1, c2, c3, c4, c5 = st.columns(5)
-    ticker = c1.selectbox("Counterparty", tickers, key="xva_ticker")
+    mode = c5.radio(
+        "Market data", ["synthetic", "real", "LSEG"], horizontal=True,
+        help="real = FRED + NYMEX via network · LSEG = newest Codebook export in "
+        "data/processed/ (adds CDS-implied CVA)",
+    )
+
+    lseg_path, lseg_exp = "", None
+    if mode == "LSEG":
+        import glob
+
+        files = sorted(glob.glob("data/processed/lseg_export_*.json"))
+        if not files:
+            st.info(
+                "No LSEG export found — run `notebooks/codebook_cds_pull.ipynb` in "
+                "Workspace Codebook and drop the JSON into `data/processed/`."
+            )
+            return
+        lseg_path = files[-1]
+        from creditlab.xva.lseg import load_lseg_export  # pure stdlib — parent-safe
+
+        lseg_exp = load_lseg_export(lseg_path)
+        ticker = c1.selectbox("Counterparty (CDS names)", sorted(lseg_exp.cds),
+                              key="xva_ticker_lseg")
+    else:
+        ticker = c1.selectbox("Counterparty", panel_tickers, key="xva_ticker")
+
     tenor = c2.number_input("Tenor (years)", value=3.0, min_value=1.0, max_value=5.0, step=0.5)
     quantity = c3.number_input("MMBtu / quarter", value=250_000.0, step=50_000.0)
     samples = c4.selectbox("MC paths", [500, 1000, 2000, 5000], index=2)
-    real = c5.radio("Market data", ["synthetic", "real"], horizontal=True,
-                    help="real = FRED treasuries + NYMEX NG strip (network)") == "real"
 
-    row = latest[latest["ticker"] == ticker].iloc[0]
-    pd_1y = float(row["pd_cal"])
+    sub = latest[latest["ticker"] == ticker]
+    if not sub.empty:
+        row = sub.iloc[0]
+        rating, pd_1y = str(row["rating"]), float(row["pd_cal"])
+    else:  # CDS names are usually large caps outside the EDGAR panel
+        rating = "n/a"
+        pd_1y = st.number_input(
+            f"Model 1y PD (%) — {ticker} not in the scored panel", min_value=0.01,
+            max_value=20.0, value=0.5, step=0.05, key="xva_model_pd",
+        ) / 100.0
 
     try:
-        res = _run_xva_cached(ticker, pd_1y, 0.4, tenor, quantity, int(samples), real)
+        res = _run_xva_cached(ticker, pd_1y, 0.4, tenor, quantity, int(samples),
+                              mode == "real", lseg_path)
     except Exception as e:  # network or ORE failure — show, don't crash the app
         st.error(f"XVA run failed: {e}")
         return
 
     md = res.inputs.market
+    src = md.source if not lseg_path else f"{md.source} ({lseg_path.split('/')[-1]})"
     st.caption(
-        f"Market: **{md.source}** · gas spot {md.spot:.3f} · swap fair price "
+        f"Market: **{src}** · gas spot {md.spot:.3f} · swap fair price "
         f"{res.inputs.fixed_price:.3f} · vol {md.sigma:.0%} · "
-        f"rating {row['rating']} · 1y PD {pd_1y:.2%} → hazard {res.inputs.hazard_rate:.4f}"
+        f"rating {rating} · 1y PD {pd_1y:.2%} → hazard {res.inputs.hazard_rate:.4f}"
     )
+
+    if lseg_exp is not None and lseg_exp.cds_for(ticker) is not None:
+        try:
+            res_cds = _run_xva_cached(ticker, pd_1y, 0.4, tenor, quantity,
+                                      int(samples), False, lseg_path, use_cds=True)
+        except Exception as e:
+            st.error(f"CDS-curve run failed: {e}")
+            return
+        quote = lseg_exp.cds_for(ticker)
+        spread_5y = dict(quote.spreads).get(5.0)
+        m = st.columns(4)
+        m[0].metric("CVA — scorecard hazard", f"${res.cva:,.0f}",
+                    f"model 1y PD {pd_1y:.2%}", delta_color="off")
+        m[1].metric("CVA — CDS-implied", f"${res_cds.cva:,.0f}",
+                    f"5y spread {spread_5y * 1e4:.0f}bp" if spread_5y else "market curve",
+                    delta_color="off")
+        ratio = res_cds.cva / res.cva if res.cva > 0 else float("nan")
+        m[2].metric("Market / model", f"{ratio:.2f}x")
+        m[3].metric("Recovery (CDS)", f"{quote.recovery:.0%}")
+        st.caption(
+            "Same simulated exposure, two default curves: real-world scorecard PD vs "
+            "risk-neutral CDS pricing — the gap is the credit risk premium desks "
+            "charge as CVA."
+        )
 
     m = st.columns(4)
     m[0].metric("CVA", f"${res.cva:,.0f}")

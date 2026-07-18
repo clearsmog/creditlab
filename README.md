@@ -87,7 +87,7 @@ uv run streamlit run src/creditlab/dashboard.py
 | Page | Purpose |
 | --- | --- |
 | **Trading credit desk** | Counterparty → limit → FO memo → pre-deal utilisation |
-| XVA — CVA/PFE | Simulated exposure profile & CVA via ORE, synthetic or real market (needs `--extra xva`) |
+| XVA — CVA/PFE | Simulated exposure & CVA via ORE — synthetic, real (FRED/NYMEX), or LSEG export with model-vs-market CVA (needs `--extra xva`) |
 | Firm explorer | Ratio & PD history |
 | Portfolio overview / risk | Book composition, Monte Carlo losses |
 | Transitions | S&P-style matrix & cumulative PDs |
