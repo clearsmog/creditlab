@@ -175,6 +175,25 @@ vs CDS-implied (risk-neutral market pricing) — the model-vs-market gap that
 drives desk CVA. Exports are licensed for personal academic use: keep them in
 the gitignored `data/` tree, never in the repo.
 
+### Agency ratings benchmark (optional, Capital IQ)
+
+Validate the scorecard's internal ratings against real S&P issuer ratings:
+
+```sh
+uv run python -m creditlab.validation.agency --dump-tickers tickers.csv   # upload list
+# In Capital IQ: Screening → Company Screening → match on the ticker list,
+# add display column "S&P LT Local Currency Issuer Credit Rating",
+# export to Excel and save as CSV → data/processed/capiq_ratings.csv
+uv run python -m creditlab.validation.agency data/processed/capiq_ratings.csv
+```
+
+The report shows exact/within-one grade agreement, Spearman/Kendall rank
+correlation, signed bias (is the model systematically harsher than S&P?), a
+7×7 confusion matrix, and the names ≥2 grades apart. Notched agency ratings
+collapse onto the internal 7-grade scale; NR and D/SD names are excluded.
+The loader tolerates CapIQ's preamble rows and `NYSE:XYZ` ticker prefixes.
+Dry run without access: `tests/fixtures/capiq_ratings_sample.csv`.
+
 ### Limit policy (demo)
 
 Transparent construction (replace with house policy in production):
@@ -254,6 +273,9 @@ SEC EDGAR (+ optional private WRDS)
 - [x] Energy sector peer sets / commodity offtaker templates  
 - [x] Optional CVA/PFE via ORE (true counterparty risk)  
 - [x] Export limit blotter to CSV for “Credit Risk Cube”-style ops demos  
+- [x] LSEG CDS-implied hazard curves (model-vs-market CVA)  
+- [x] Agency ratings benchmark vs Capital IQ export  
+- [ ] FAME private-counterparty book (UK unlisted energy names)  
 
 ---
 

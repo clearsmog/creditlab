@@ -1,0 +1,13 @@
+Screening Results Export,,
+S&P Capital IQ - SAMPLE FILE (synthetic values in the export format - not licensed data),,
+,,
+Company Name,Ticker,S&P LT Issuer Credit Rating
+Blue Chip Energy Corp,NYSE:BLU,AA-
+Mid Corp Resources,NasdaqGS:MID,BBB
+Crossover Gas Inc,NYSE:XOV,BB+
+Weak Petroleum,NYSE:WEK,B-
+Distressed Drilling,OTCPK:DIS,CCC+
+Fallen Angel LP,NYSE:FAL,SD
+Unrated Holdings,NYSE:UNR,NR
+Solid Utility Co,NYSE:SOL,A
+Dup Ticker Co,NYSE:BLU,AA
