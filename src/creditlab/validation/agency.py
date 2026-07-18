@@ -51,20 +51,44 @@ def _find_header_row(path: str) -> int:
     raise ValueError(f"no header row with a ticker column found in {path}")
 
 
+def _read_table(path: str) -> pd.DataFrame:
+    """CSV or xlsx CapIQ export → raw DataFrame with real headers."""
+    if path.lower().endswith((".xlsx", ".xls")):
+        raw = pd.read_excel(path, header=None)
+        hdr = next(
+            i for i in range(min(len(raw), 25))
+            if raw.iloc[i].astype(str).str.contains("ticker", case=False).any()
+        )
+        df = raw.iloc[hdr + 1:].reset_index(drop=True)
+        df.columns = [str(c) for c in raw.iloc[hdr]]
+        return df
+    return pd.read_csv(path, skiprows=_find_header_row(path), encoding="utf-8-sig")
+
+
 def load_agency_ratings(path: str) -> pd.DataFrame:
-    """Read a CapIQ export → DataFrame[ticker, agency_rating, agency_grade]."""
-    df = pd.read_csv(path, skiprows=_find_header_row(path), encoding="utf-8-sig")
+    """Read a CapIQ export → DataFrame[ticker, agency_rating, agency_grade].
+
+    Rows whose rating cell is not a recognised agency token (metadata rows,
+    field aliases) are dropped.
+    """
+    df = _read_table(path)
     cols = {c.lower().strip(): c for c in df.columns}
     ticker_col = next(c for k, c in cols.items() if "ticker" in k)
-    rating_col = next(c for k, c in cols.items() if "rating" in k)
+    rating_col = next(
+        c for k, c in cols.items()
+        if "rating" in k and "date" not in k and "action" not in k
+    )
 
     out = pd.DataFrame({
-        "ticker": df[ticker_col].astype(str).str.strip().str.upper(),
-        # CapIQ tickers come as "NYSE:OXY" — keep the symbol part
-        "agency_rating": df[rating_col].astype(str).str.strip().str.upper(),
-    })
+        "ticker": df[ticker_col],
+        "agency_rating": df[rating_col],
+    }).dropna()
+    out["ticker"] = out["ticker"].astype(str).str.strip().str.upper()
+    # CapIQ tickers come as "NYSE:OXY" — keep the symbol part
     out["ticker"] = out["ticker"].str.split(":").str[-1]
+    out["agency_rating"] = out["agency_rating"].astype(str).str.strip().str.upper()
     out = out[(out["ticker"] != "") & (out["ticker"] != "NAN")]
+    out = out[out["agency_rating"].isin(AGENCY_TO_GRADE)]
     out["agency_grade"] = out["agency_rating"].map(AGENCY_TO_GRADE)
     return out.drop_duplicates(subset="ticker").reset_index(drop=True)
 

@@ -180,19 +180,24 @@ the gitignored `data/` tree, never in the repo.
 Validate the scorecard's internal ratings against real S&P issuer ratings:
 
 ```sh
-uv run python -m creditlab.validation.agency --dump-tickers tickers.csv   # upload list
-# In Capital IQ: Screening → Company Screening → match on the ticker list,
-# add display column "S&P LT Local Currency Issuer Credit Rating",
-# export to Excel and save as CSV → data/processed/capiq_ratings.csv
-uv run python -m creditlab.validation.agency data/processed/capiq_ratings.csv
+# In S&P Capital IQ Pro: Screener → Companies →
+#   criteria: "S&P Credit Rating" (Issuer Credit Rating, Local Currency LT) In [all]
+#             AND Geography In United States
+#   display columns: Ticker, S&P Credit Rating
+#   Export → "Results As Values" → save to data/processed/capiq_ratings.xlsx
+uv run python -m creditlab.validation.agency data/processed/capiq_ratings.xlsx
 ```
 
-The report shows exact/within-one grade agreement, Spearman/Kendall rank
-correlation, signed bias (is the model systematically harsher than S&P?), a
-7×7 confusion matrix, and the names ≥2 grades apart. Notched agency ratings
-collapse onto the internal 7-grade scale; NR and D/SD names are excluded.
-The loader tolerates CapIQ's preamble rows and `NYSE:XYZ` ticker prefixes.
-Dry run without access: `tests/fixtures/capiq_ratings_sample.csv`.
+The screen exports the whole rated US universe; matching to the panel happens
+locally by ticker (the screener has no bulk identifier upload). The report
+shows exact/within-one grade agreement, Spearman/Kendall rank correlation,
+signed bias (is the model systematically harsher than S&P?), a 7×7 confusion
+matrix, and the names ≥2 grades apart. Notched agency ratings collapse onto
+the internal 7-grade scale; NR and D/SD names are excluded. The loader reads
+CapIQ's xlsx or CSV layouts (preamble rows, field-alias rows, `NYSE:XYZ`
+prefixes). Dry run without access: `tests/fixtures/capiq_ratings_sample.csv`.
+Expect a modest overlap — the EDGAR panel is small/mid-cap heavy while the
+rated universe skews large-cap.
 
 ### Limit policy (demo)
 

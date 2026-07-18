@@ -361,6 +361,7 @@ xva = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "openpyxl" },
     { name = "pytest" },
 ]
 
@@ -383,7 +384,10 @@ requires-dist = [
 provides-extras = ["xva"]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.1.1" }]
+dev = [
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "pytest", specifier = ">=9.1.1" },
+]
 
 [[package]]
 name = "curl-cffi"
@@ -425,6 +429,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/a9/95/a3dbbb5028f35eafb79008e7522a75244477d2838f38cbb722248dabc2a8/cycler-0.12.1.tar.gz", hash = "sha256:88bb128f02ba341da8ef447245a9e138fae777f6a23943da4540077d3601eb1c", size = 7615, upload-time = "2023-10-07T05:32:18.335Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e7/05/c19819d5e3d95294a6f5947fb9b9629efb316b96de511b418c53d245aae6/cycler-0.12.1-py3-none-any.whl", hash = "sha256:85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30", size = 8321, upload-time = "2023-10-07T05:32:16.783Z" },
+]
+
+[[package]]
+name = "et-xmlfile"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
 ]
 
 [[package]]
@@ -952,6 +965,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/df/ed/f9e678945dd0cc9656d6c9c3a3b4b035d8a8e302a389a9c325a55e8992f1/open_source_risk_engine-1.8.16.0-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:b06bd72920c0df0c911f49412b0f91ed38ed76f1ed542651b044090d735809ac", size = 61809222, upload-time = "2026-05-29T08:38:48.715Z" },
     { url = "https://files.pythonhosted.org/packages/d0/f9/01210d59272ce56c5fe316ef10c133a4ace69f30522eeb8d290541cd2ec7/open_source_risk_engine-1.8.16.0-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:04e95bbb36d160eafb3a61d373ab7c5a5d04a2687f40b2c44494c1d20c1484df", size = 73613598, upload-time = "2026-06-03T12:58:06.258Z" },
     { url = "https://files.pythonhosted.org/packages/34/bf/571337fe4106384b8e8ac78774d390f25bf2bf7de154eaf9ea27f9639db6/open_source_risk_engine-1.8.16.0-cp314-cp314-win_amd64.whl", hash = "sha256:804976b070eaaa7edcdf16203fd95a13fda80b1ae7ab5d57f329fef39178ef7e", size = 54975156, upload-time = "2026-06-03T12:58:17.301Z" },
+]
+
+[[package]]
+name = "openpyxl"
+version = "3.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "et-xmlfile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3d/f9/88d94a75de065ea32619465d2f77b29a0469500e99012523b91cc4141cd1/openpyxl-3.1.5.tar.gz", hash = "sha256:cf0e3cf56142039133628b5acffe8ef0c12bc902d2aadd3e0fe5878dc08d1050", size = 186464, upload-time = "2024-06-28T14:03:44.161Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c0/da/977ded879c29cbd04de313843e76868e6e13408a94ed6b987245dc7c8506/openpyxl-3.1.5-py2.py3-none-any.whl", hash = "sha256:5282c12b107bffeef825f4617dc029afaf41d0ea60823bbb665ef3079dc79de2", size = 250910, upload-time = "2024-06-28T14:03:41.161Z" },
 ]
 
 [[package]]

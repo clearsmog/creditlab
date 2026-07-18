@@ -54,6 +54,29 @@ def test_compare_ratings_stats():
     assert c.confusion.values.sum() == 6
 
 
+def test_loader_reads_capiq_xlsx_layout(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    rows = [
+        [None, None, None, None],                                     # preamble
+        ["Entity Name", "Entity ID", "Ticker", "S&P Credit Rating"],  # header
+        ["SP_ENTITY_NAME", "SP_ENTITY_ID", "SP_TICKER", "RD_CREDIT_RATING_GLOBAL"],
+        [None, None, None, "Local Currency LT|Current"],              # metadata
+        ["Blue Chip Energy", 1, "BLU", "AA-"],
+        ["No Ticker Co", 2, None, "BBB"],
+        ["Unrated Co", 3, "UNR", "NR"],
+    ]
+    for r in rows:
+        ws.append(r)
+    path = tmp_path / "export.xlsx"
+    wb.save(path)
+
+    df = load_agency_ratings(str(path))
+    assert set(df["ticker"]) == {"BLU", "UNR"}  # metadata + blank-ticker dropped
+    assert df.set_index("ticker").loc["BLU", "agency_grade"] == "AA"
+
+
 def test_report_mentions_bias_and_counts():
     c = compare_ratings(_scored(), load_agency_ratings(FIXTURE))
     text = format_report(c)
