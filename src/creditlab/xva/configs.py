@@ -52,6 +52,9 @@ class XvaInputs:
     quantile: float = 0.95
     seed: int = 42
     market: MarketData = None  # type: ignore[assignment]  # filled in __post_init__
+    # market-implied alternative to the flat scorecard hazard: CDS spread term
+    # structure [(tenor years, spread decimal)]; ORE bootstraps the curve
+    cds_spreads: list[tuple[float, float]] | None = None
 
     def __post_init__(self) -> None:
         if self.market is None:
@@ -112,8 +115,16 @@ def market_txt(p: XvaInputs) -> str:
     for t in ("1Y", "5Y"):
         lines.append(f"{d} COMMODITY_OPTION/RATE_LNVOL/{COM_QUOTE}/USD/{t}/ATM/AtmFwd {md.sigma}")
     lines.append(f"{d} RECOVERY_RATE/RATE/{p.counterparty}/SR/USD {p.recovery}")
-    for t in HAZARD_TENORS:
-        lines.append(f"{d} HAZARD_RATE/RATE/{p.counterparty}/SR/USD/{t} {p.hazard_rate:.6f}")
+    if p.cds_spreads is not None:
+        for t, s in p.cds_spreads:
+            lines.append(
+                f"{d} CDS/CREDIT_SPREAD/{p.counterparty}/SR/USD/{_tenor_label(t)} {s:.6f}"
+            )
+    else:
+        for t in HAZARD_TENORS:
+            lines.append(
+                f"{d} HAZARD_RATE/RATE/{p.counterparty}/SR/USD/{t} {p.hazard_rate:.6f}"
+            )
     return "\n".join(lines) + "\n"
 
 
@@ -172,10 +183,21 @@ def curveconfig_xml(p: XvaInputs) -> str:
         f"        <Quote>COMMODITY_FWD/PRICE/{COM_QUOTE}/USD/{fd.isoformat()}</Quote>"
         for fd, _ in p.market.forwards
     )
-    hz_quotes = "\n".join(
-        f"        <Quote>HAZARD_RATE/RATE/{p.counterparty}/SR/USD/{t}</Quote>"
-        for t in HAZARD_TENORS
-    )
+    if p.cds_spreads is not None:
+        curve_type = "SpreadCDS"
+        # bootstrapping survival probabilities from spreads needs discounting
+        discount_ref = "Yield/USD/USD-FLAT"
+        default_quotes = "\n".join(
+            f"        <Quote>CDS/CREDIT_SPREAD/{p.counterparty}/SR/USD/{_tenor_label(t)}</Quote>"
+            for t, _ in p.cds_spreads
+        )
+    else:
+        curve_type = "HazardRate"
+        discount_ref = ""
+        default_quotes = "\n".join(
+            f"        <Quote>HAZARD_RATE/RATE/{p.counterparty}/SR/USD/{t}</Quote>"
+            for t in HAZARD_TENORS
+        )
     return f"""<?xml version="1.0"?>
 <CurveConfiguration>
   <YieldCurves>
@@ -214,14 +236,14 @@ def curveconfig_xml(p: XvaInputs) -> str:
   <DefaultCurves>
     <DefaultCurve>
       <CurveId>{p.counterparty}_SR_USD</CurveId>
-      <CurveDescription>Flat hazard rate implied from CreditLab 1y PD</CurveDescription>
+      <CurveDescription>Counterparty default curve ({curve_type})</CurveDescription>
       <Currency>USD</Currency>
-      <Type>HazardRate</Type>
-      <DiscountCurve/>
+      <Type>{curve_type}</Type>
+      <DiscountCurve>{discount_ref}</DiscountCurve>
       <DayCounter>A365</DayCounter>
       <RecoveryRate>RECOVERY_RATE/RATE/{p.counterparty}/SR/USD</RecoveryRate>
       <Quotes>
-{hz_quotes}
+{default_quotes}
       </Quotes>
       <Conventions>CDS-STANDARD-CONVENTIONS</Conventions>
     </DefaultCurve>

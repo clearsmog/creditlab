@@ -135,3 +135,32 @@ def test_cva_increases_with_pd(tmp_path):
     low = run_xva(XvaInputs(pd_1y=0.005, **FAST), work_dir=str(tmp_path / "low"))
     high = run_xva(XvaInputs(pd_1y=0.05, **FAST), work_dir=str(tmp_path / "high"))
     assert high.cva > 2 * low.cva
+
+
+def test_cds_spreads_switch_quote_and_curve_type():
+    spreads = [(1.0, 0.004), (5.0, 0.0085)]
+    p = XvaInputs(counterparty="ACME", cds_spreads=spreads)
+    from creditlab.xva.configs import curveconfig_xml
+
+    txt = market_txt(p)
+    assert "CDS/CREDIT_SPREAD/ACME/SR/USD/1Y 0.004000" in txt
+    assert "HAZARD_RATE" not in txt
+    cc = curveconfig_xml(p)
+    assert "<Type>SpreadCDS</Type>" in cc
+    assert "<DiscountCurve>Yield/USD/USD-FLAT</DiscountCurve>" in cc
+
+
+@needs_ore
+def test_cva_from_cds_curve_tracks_spread_level(tmp_path):
+    from creditlab.xva import run_xva
+
+    tight = run_xva(
+        XvaInputs(cds_spreads=[(1.0, 0.004), (5.0, 0.006)], **FAST),
+        work_dir=str(tmp_path / "tight"),
+    )
+    wide = run_xva(
+        XvaInputs(cds_spreads=[(1.0, 0.02), (5.0, 0.03)], **FAST),
+        work_dir=str(tmp_path / "wide"),
+    )
+    assert tight.cva > 0
+    assert wide.cva > 3 * tight.cva  # ~5x spreads → roughly proportional CVA
