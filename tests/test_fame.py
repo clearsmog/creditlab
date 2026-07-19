@@ -43,6 +43,21 @@ def test_asset_turnover_and_log_assets():
     assert h["log_assets"] == pytest.approx(np.log(1_250_000 * 1_000 * FX))
 
 
+def test_xlsx_export_scans_past_summary_sheet(tmp_path):
+    """Real FAME exports: a 'Search summary' sheet precedes the results."""
+    import pandas as pd
+
+    path = tmp_path / "fame.xlsx"
+    with pd.ExcelWriter(path) as xw:
+        pd.DataFrame([["Product name", "Fame"], ["Update number", "10730"]]).to_excel(
+            xw, sheet_name="Search summary", index=False, header=False
+        )
+        pd.read_csv(FIXTURE).to_excel(xw, sheet_name="Results", index=False)
+    book = load_fame_export(str(path), fx_gbpusd=FX)
+    assert len(book) == 5
+    assert book.set_index("name").loc["NORTHERN GAS TRADING LIMITED", "fame_score"] == 82
+
+
 needs_panel = pytest.mark.skipif(
     not os.path.exists("data/processed/panel.parquet"),
     reason="local EDGAR panel not available",

@@ -52,14 +52,21 @@ FAME_COLUMNS = {
 
 def _read_table(path: str) -> pd.DataFrame:
     if path.lower().endswith((".xlsx", ".xls")):
-        raw = pd.read_excel(path, header=None)
-        hdr = next(
-            i for i in range(min(len(raw), 25))
-            if raw.iloc[i].astype(str).str.contains("company name", case=False).any()
-        )
-        df = raw.iloc[hdr + 1:].reset_index(drop=True)
-        df.columns = [str(c) for c in raw.iloc[hdr]]
-        return df
+        # calamine, not openpyxl: FAME styles.xml uses attributes openpyxl
+        # rejects. Real exports ship a "Search summary" sheet before the
+        # results, so scan sheets for the one with a company-name header.
+        book = pd.read_excel(path, header=None, sheet_name=None, engine="calamine")
+        for raw in book.values():
+            hdr = next(
+                (i for i in range(min(len(raw), 25))
+                 if raw.iloc[i].astype(str).str.contains("company name", case=False).any()),
+                None,
+            )
+            if hdr is not None:
+                df = raw.iloc[hdr + 1:].reset_index(drop=True)
+                df.columns = [str(c) for c in raw.iloc[hdr]]
+                return df
+        raise ValueError(f"no sheet with a company-name header in {path}")
     return pd.read_csv(path, encoding="utf-8-sig")
 
 

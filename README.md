@@ -207,6 +207,39 @@ to 3%. Post-remediation: exact grade agreement 28%→45%, within one grade
 the known limits of a fundamentals-only model (business risk, scale,
 event-driven credits).
 
+### FAME private-counterparty book (optional, FAME/BvD)
+
+UK energy trading counterparties are mostly *private* companies — no ticker,
+no EDGAR filings. A FAME (Bureau van Dijk / Moody's) screening export puts
+them through the same pipeline: scorecard PD → master-scale rating →
+unsecured limit blotter, with FAME's own credit score riding along as an
+external check.
+
+```sh
+# In FAME: Search → active companies AND UK SIC (2007) 35140 (electricity
+#   trading) or 3523 (gas trading via mains) AND Turnover ≥ £10m.
+# Add columns: Turnover, Total Assets, Shareholders Funds, Return on Total
+#   Assets, Current ratio, Interest Cover, Gearing, Credit score
+#   (all "th GBP / Last avail. yr") → Apply → Excel → Current view →
+#   save to data/processed/fame_export.xlsx
+uv run python -m creditlab.counterparty.fame data/processed/fame_export.xlsx
+```
+
+The loader maps FAME's th-GBP levels and percentage ratios onto the panel
+schema (USD, decimals; missing "n.a." cells hit the WoE missing bin), scans
+past FAME's "Search summary" sheet, and reads the styles openpyxl rejects
+(calamine engine). Dry run without access: `tests/fixtures/fame_sample.csv`.
+
+**Run on the real book (Jul 2026, 129 names):** the screen recovers the
+actual GB desk universe — Octopus, SEFE Marketing & Trading, EDF Trading,
+Drax, Centrica/British Gas entities, TotalEnergies Gas & Power. Face
+validity is strong: Bulb Energy and People's Energy — both failed suppliers
+— land at B (PD ≈ 5%), Storengy and E.ON Energy Solutions at A. Spearman
+between model PD and FAME's credit score is −0.43 on 119 overlapping names
+(negative = orientations agree). Printed caveat on every run: the scorecard
+was developed on US listed issuers, so the UK-private application
+demonstrates the mechanics, not a validated cross-population model.
+
 ### Limit policy (demo)
 
 Transparent construction (replace with house policy in production):
@@ -289,7 +322,7 @@ SEC EDGAR (+ optional private WRDS)
 - [x] LSEG CDS-implied hazard curves (model-vs-market CVA)  
 - [x] Agency ratings benchmark vs Capital IQ export  
 - [x] Recalibration: central tendency 1.5%→3% (zeroed the S&P bias)  
-- [ ] FAME private-counterparty book (UK unlisted energy names)  
+- [x] FAME private-counterparty book (UK unlisted energy names)  
 
 ---
 
