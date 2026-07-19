@@ -18,10 +18,8 @@ from creditlab.counterparty.limits import recommend_limit
 from creditlab.counterparty.memo import format_credit_memo
 from creditlab.counterparty.offtakers import OFFTAKER_TEMPLATES
 from creditlab.counterparty.peers import peer_context_lines
-from creditlab.models.scorecard import Scorecard, calibrate_pds
+from creditlab.models.scorecard import CENTRAL_TENDENCY, Scorecard, calibrate_pds
 from creditlab.portfolio.ratings import assign_rating
-
-CENTRAL_TENDENCY = 0.015
 
 
 def load_scored_latest(panel_path: str = "data/processed/panel.parquet") -> pd.DataFrame:

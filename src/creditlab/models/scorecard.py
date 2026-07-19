@@ -98,6 +98,14 @@ class Scorecard:
         return pd.DataFrame(rows).sort_values("iv", ascending=False)
 
 
+# Portfolio-average 1y PD the calibrated scorecard should imply. Originally
+# 1.5%; benchmarking internal ratings against S&P issuer ratings showed a
+# ~0.5-grade lenient bias, and the sweep in `creditlab.validation.agency
+# --tune-ct` zeroes it at 3% — consistent with a small-cap panel that skews
+# speculative-grade (agency speculative-grade default rates run 3-4%/y).
+CENTRAL_TENDENCY = 0.030
+
+
 def calibrate_pds(p: np.ndarray, sample_rate: float, target_rate: float) -> np.ndarray:
     """Prior correction for a defaulter-oversampled development sample.
 

@@ -244,13 +244,58 @@ def format_report(c: AgencyComparison) -> str:
     return "\n".join(lines)
 
 
+def tune_central_tendency(agency: pd.DataFrame) -> None:
+    """Sweep the calibration central tendency; report rating bias at each level.
+
+    The remediation knob for a lenient/harsh scorecard: raising the target
+    portfolio PD shifts every calibrated PD up, pushing ratings down the
+    scale. Prints the bias curve and the level that zeroes the mean signed
+    grade difference vs the agency benchmark.
+    """
+    from creditlab.models.scorecard import CENTRAL_TENDENCY, Scorecard, calibrate_pds
+    from creditlab.portfolio.ratings import assign_rating
+
+    df = pd.read_parquet("data/processed/panel.parquet")
+    df = df[df["period_end"] <= pd.Timestamp.today() - pd.DateOffset(years=1)]
+    train = df[df["fyear"] <= 2019]
+    card = Scorecard().fit(train, train["default_within_1y"])
+    sample_rate = float(train["default_within_1y"].mean())
+    df = df.assign(pd_raw=card.predict_pd(df))
+    latest = df.sort_values("period_end").groupby("cik", as_index=False).tail(1)
+    cutoff = pd.Timestamp.today() - pd.DateOffset(years=3)
+    latest = latest[latest["period_end"] >= cutoff]
+
+    print(f"{'CT':>6} {'bias':>7} {'exact':>6} {'within1':>8} {'matched':>8}")
+    best = (None, float("inf"))
+    for ct in (0.010, 0.015, 0.020, 0.025, 0.030, 0.035, 0.040, 0.050, 0.060):
+        scored = latest.assign(
+            rating=assign_rating(
+                calibrate_pds(latest["pd_raw"].to_numpy(), sample_rate, ct)
+            )
+        )
+        c = compare_ratings(scored, agency)
+        marker = " ← current" if abs(ct - CENTRAL_TENDENCY) < 1e-9 else ""
+        print(f"{ct:>6.3f} {c.mean_signed_diff:>+7.2f} {c.exact:>6.0%} "
+              f"{c.within_one:>8.0%} {c.n_matched:>8}{marker}")
+        if abs(c.mean_signed_diff) < best[1]:
+            best = (ct, abs(c.mean_signed_diff))
+    print(f"\nbias-minimizing central tendency: {best[0]:.3f} "
+          f"(set CENTRAL_TENDENCY in creditlab/models/scorecard.py)")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("csv", nargs="?", default="data/processed/capiq_ratings.csv",
                         help="Capital IQ screening export")
     parser.add_argument("--dump-tickers", metavar="OUT",
                         help="write the panel ticker list (for CapIQ upload) and exit")
+    parser.add_argument("--tune-ct", action="store_true",
+                        help="sweep the calibration central tendency against the benchmark")
     args = parser.parse_args()
+
+    if args.tune_ct:
+        tune_central_tendency(load_agency_ratings(args.csv))
+        return
 
     from creditlab.counterparty.desk import load_scored_latest
 

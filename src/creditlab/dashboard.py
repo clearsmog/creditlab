@@ -29,7 +29,7 @@ from creditlab.counterparty.exposure import headroom, pfe_addon
 from creditlab.counterparty.limits import recommend_limit
 from creditlab.counterparty.memo import format_credit_memo
 from creditlab.ecl.engine import SCENARIOS, ecl, stage_of, weighted_ecl
-from creditlab.models.scorecard import Scorecard, calibrate_pds
+from creditlab.models.scorecard import CENTRAL_TENDENCY, Scorecard, calibrate_pds
 from creditlab.portfolio.ratings import GRADES, assign_rating
 from creditlab.portfolio.simulation import simulate_losses, summarize
 from creditlab.portfolio.transitions import SP_1Y, STATES, cumulative_pd
@@ -39,8 +39,6 @@ BLUE, AQUA, YELLOW, GREEN = "#2a78d6", "#1baf7a", "#eda100", "#008300"
 SEQ = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 SURFACE, INK, INK2, MUTED = "#fcfcfb", "#0b0b0b", "#52514e", "#898781"
 GRID, BASE = "#e1e0d9", "#c3c2b7"
-
-CENTRAL_TENDENCY = 0.015
 
 
 def themed(fig: go.Figure, height: int = 380) -> go.Figure:

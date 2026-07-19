@@ -189,15 +189,23 @@ uv run python -m creditlab.validation.agency data/processed/capiq_ratings.xlsx
 ```
 
 The screen exports the whole rated US universe; matching to the panel happens
-locally by ticker (the screener has no bulk identifier upload). The report
-shows exact/within-one grade agreement, Spearman/Kendall rank correlation,
-signed bias (is the model systematically harsher than S&P?), a 7×7 confusion
-matrix, and the names ≥2 grades apart. Notched agency ratings collapse onto
-the internal 7-grade scale; NR and D/SD names are excluded. The loader reads
-CapIQ's xlsx or CSV layouts (preamble rows, field-alias rows, `NYSE:XYZ`
-prefixes). Dry run without access: `tests/fixtures/capiq_ratings_sample.csv`.
-Expect a modest overlap — the EDGAR panel is small/mid-cap heavy while the
-rated universe skews large-cap.
+locally — exact ticker first, then exact normalized company name (no fuzzy
+matching; parent/subsidiary name collisions are excluded). The report shows
+exact/within-one grade agreement, Spearman/Kendall rank correlation, signed
+bias, a 7×7 confusion matrix, and the names ≥2 grades apart. Notched agency
+ratings collapse onto the internal 7-grade scale; NR and D/SD names and
+issuers with no filing in 3y are excluded. The loader reads CapIQ's xlsx or
+CSV layouts. Dry run without access: `tests/fixtures/capiq_ratings_sample.csv`.
+
+**Governance loop, run on real data (Jul 2026):** the first benchmark run
+(75 matched names) showed the scorecard ~0.5 grades *lenient* vs S&P.
+`--tune-ct` sweeps the calibration central tendency against the benchmark;
+the bias zeroes at a 3% portfolio-average PD — consistent with a small-cap,
+speculative-grade-heavy panel — so `CENTRAL_TENDENCY` was raised from 1.5%
+to 3%. Post-remediation: exact grade agreement 28%→45%, within one grade
+85%→93%, bias −0.57→−0.05, Spearman 0.65. Residual ≥2-grade outliers are
+the known limits of a fundamentals-only model (business risk, scale,
+event-driven credits).
 
 ### Limit policy (demo)
 
@@ -280,6 +288,7 @@ SEC EDGAR (+ optional private WRDS)
 - [x] Export limit blotter to CSV for “Credit Risk Cube”-style ops demos  
 - [x] LSEG CDS-implied hazard curves (model-vs-market CVA)  
 - [x] Agency ratings benchmark vs Capital IQ export  
+- [x] Recalibration: central tendency 1.5%→3% (zeroed the S&P bias)  
 - [ ] FAME private-counterparty book (UK unlisted energy names)  
 
 ---
