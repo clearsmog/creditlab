@@ -18,12 +18,28 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import re
 from dataclasses import dataclass
 
 import pandas as pd
 from scipy.stats import kendalltau, spearmanr
 
 from creditlab.portfolio.ratings import GRADES
+
+# legal-form tokens stripped (iteratively) from the end of normalized names
+NAME_SUFFIXES = {"INC", "CORP", "CORPORATION", "INCORPORATED", "CO", "COMPANY",
+                 "LLC", "LP", "LTD", "LIMITED", "PLC"}
+
+
+def normalize_name(s: str) -> str:
+    """Company name → canonical form for exact matching (no fuzzy logic:
+    a false positive in a validation set is worse than a missed match)."""
+    s = re.sub(r"\([^)]*\)", " ", str(s).upper())   # drop "(NYSE:XYZ)" etc.
+    s = re.sub(r"[^A-Z0-9& ]", " ", s)
+    toks = s.split()
+    while len(toks) > 1 and toks[-1] in NAME_SUFFIXES:
+        toks.pop()
+    return " ".join(toks)
 
 GRADE_ORD = {g: i for i, g in enumerate(GRADES)}
 
@@ -66,10 +82,14 @@ def _read_table(path: str) -> pd.DataFrame:
 
 
 def load_agency_ratings(path: str) -> pd.DataFrame:
-    """Read a CapIQ export → DataFrame[ticker, agency_rating, agency_grade].
+    """Read a CapIQ export → DataFrame[ticker, name, nname, agency_rating,
+    agency_grade].
 
     Rows whose rating cell is not a recognised agency token (metadata rows,
-    field aliases) are dropped.
+    field aliases) are dropped. Tickers come from the Ticker column, falling
+    back to a "(NYSE:XYZ)" parenthetical in the entity name. Normalized
+    names that appear with conflicting ratings (parent vs subsidiary) are
+    blanked so the name-matching stage cannot pick a wrong entity.
     """
     df = _read_table(path)
     cols = {c.lower().strip(): c for c in df.columns}
@@ -78,25 +98,45 @@ def load_agency_ratings(path: str) -> pd.DataFrame:
         c for k, c in cols.items()
         if "rating" in k and "date" not in k and "action" not in k
     )
+    name_col = next((c for k, c in cols.items() if "name" in k), None)
 
     out = pd.DataFrame({
         "ticker": df[ticker_col],
+        "name": df[name_col] if name_col else "",
         "agency_rating": df[rating_col],
-    }).dropna()
-    out["ticker"] = out["ticker"].astype(str).str.strip().str.upper()
-    # CapIQ tickers come as "NYSE:OXY" — keep the symbol part
-    out["ticker"] = out["ticker"].str.split(":").str[-1]
+    }).dropna(subset=["agency_rating"])
     out["agency_rating"] = out["agency_rating"].astype(str).str.strip().str.upper()
-    out = out[(out["ticker"] != "") & (out["ticker"] != "NAN")]
     out = out[out["agency_rating"].isin(AGENCY_TO_GRADE)]
     out["agency_grade"] = out["agency_rating"].map(AGENCY_TO_GRADE)
-    return out.drop_duplicates(subset="ticker").reset_index(drop=True)
+
+    out["name"] = out["name"].fillna("").astype(str)
+    # ticker: explicit column first ("NYSE:OXY" → OXY), else embedded in name
+    out["ticker"] = (
+        out["ticker"].astype(str).str.strip().str.upper().str.split(":").str[-1]
+    )
+    embedded = out["name"].str.upper().str.extract(r"\(\w+:([\w.]+)\)")[0]
+    bad = out["ticker"].isin(["", "NAN", "NONE"])
+    out.loc[bad, "ticker"] = embedded[bad]
+    out["ticker"] = out["ticker"].fillna("")
+
+    out["nname"] = out["name"].map(normalize_name)
+    conflicted = (
+        out[out["nname"] != ""]
+        .groupby("nname")["agency_grade"]
+        .nunique(dropna=False)  # NR/D vs a real grade is also a conflict
+    )
+    out.loc[out["nname"].isin(conflicted[conflicted > 1].index), "nname"] = ""
+
+    out = out[(out["ticker"] != "") | (out["nname"] != "")]
+    return out.reset_index(drop=True)
 
 
 @dataclass
 class AgencyComparison:
-    n_agency: int              # rows in the export
+    n_agency: int              # usable rows in the export
     n_matched: int             # matched to the scored panel, with usable rating
+    n_by_ticker: int
+    n_by_name: int
     n_excluded: int            # matched but NR / D / SD
     exact: float               # share with identical coarse grade
     within_one: float          # share within one grade
@@ -110,12 +150,29 @@ class AgencyComparison:
 def compare_ratings(scored: pd.DataFrame, agency: pd.DataFrame) -> AgencyComparison:
     """Compare internal ratings (``rating`` column) to agency coarse grades.
 
-    ``scored`` is one row per issuer with ``ticker`` and ``rating``
-    (e.g. ``load_scored_latest()``).
+    ``scored`` is one row per issuer with ``ticker``, ``rating`` and
+    optionally ``name`` (e.g. ``load_scored_latest()``). Matching runs in two
+    stages: exact ticker, then exact normalized company name.
     """
-    left = scored[["ticker", "rating"]].copy()
-    left["ticker"] = left["ticker"].astype(str).str.upper()
-    m = left.merge(agency, on="ticker", how="inner")
+    left = scored.reset_index(drop=True).reset_index(names="_i")
+    left["ticker"] = left["ticker"].fillna("").astype(str).str.upper()
+    left["nname"] = (
+        left["name"].fillna("").map(normalize_name) if "name" in left else ""
+    )
+
+    a_cols = ["agency_rating", "agency_grade"]
+    by_ticker = agency[agency["ticker"] != ""].drop_duplicates("ticker")
+    m1 = left[left["ticker"] != ""].merge(
+        by_ticker[["ticker"] + a_cols], on="ticker", how="inner"
+    )
+    rest = left[~left["_i"].isin(m1["_i"])]
+    by_name = agency[agency["nname"] != ""].drop_duplicates("nname")
+    m2 = rest[rest["nname"] != ""].merge(
+        by_name[["nname"] + a_cols], on="nname", how="inner"
+    )
+    m = pd.concat(
+        [m1.assign(match="ticker"), m2.assign(match="name")], ignore_index=True
+    )
     n_excluded = int(m["agency_grade"].isna().sum())
     m = m.dropna(subset=["agency_grade"])
 
@@ -138,6 +195,8 @@ def compare_ratings(scored: pd.DataFrame, agency: pd.DataFrame) -> AgencyCompari
     return AgencyComparison(
         n_agency=len(agency),
         n_matched=len(m),
+        n_by_ticker=int((m["match"] == "ticker").sum()),
+        n_by_name=int((m["match"] == "name").sum()),
         n_excluded=n_excluded,
         exact=float((diff == 0).mean()),
         within_one=float((diff.abs() <= 1).mean()),
@@ -153,7 +212,8 @@ def format_report(c: AgencyComparison) -> str:
     header = [
         "# Scorecard vs S&P issuer ratings",
         f"Agency export: {c.n_agency} names | matched to panel: {c.n_matched} "
-        f"(+{c.n_excluded} matched but NR/D — excluded)",
+        f"({c.n_by_ticker} by ticker, {c.n_by_name} by name; "
+        f"+{c.n_excluded} matched but NR/D — excluded)",
     ]
     if c.n_matched == 0:
         return "\n".join(header + [
@@ -176,8 +236,9 @@ def format_report(c: AgencyComparison) -> str:
     if len(worst):
         lines += ["", f"Names ≥2 grades apart ({len(worst)}):"]
         for _, r in worst.iterrows():
+            label = r["ticker"] or str(r.get("name", ""))[:20]
             lines.append(
-                f"  {r['ticker']:<6} model {r['rating']:<4} vs S&P "
+                f"  {label:<20} model {r['rating']:<4} vs S&P "
                 f"{r['agency_grade']:<4} ({r['agency_rating']})"
             )
     return "\n".join(lines)
@@ -200,8 +261,15 @@ def main() -> None:
         print(f"wrote {len(tickers)} tickers → {args.dump_tickers}")
         return
 
+    # stale issuers (no filing in ~3y) carry outdated model ratings — comparing
+    # them against a current agency view measures decay, not the scorecard
+    cutoff = pd.Timestamp.today() - pd.DateOffset(years=3)
+    fresh = scored[scored["period_end"] >= cutoff]
+    print(f"panel: {len(fresh)} of {len(scored)} issuers with a filing since "
+          f"{cutoff.date()} (stale names excluded)\n")
+
     agency = load_agency_ratings(args.csv)
-    print(format_report(compare_ratings(scored, agency)))
+    print(format_report(compare_ratings(fresh, agency)))
 
 
 if __name__ == "__main__":

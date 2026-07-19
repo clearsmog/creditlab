@@ -10,6 +10,7 @@ from creditlab.validation.agency import (
     compare_ratings,
     format_report,
     load_agency_ratings,
+    normalize_name,
 )
 
 FIXTURE = "tests/fixtures/capiq_ratings_sample.csv"
@@ -17,11 +18,20 @@ FIXTURE = "tests/fixtures/capiq_ratings_sample.csv"
 
 def test_loader_skips_preamble_and_strips_exchange_prefix():
     df = load_agency_ratings(FIXTURE)
-    assert list(df.columns) == ["ticker", "agency_rating", "agency_grade"]
+    assert {"ticker", "name", "nname", "agency_rating", "agency_grade"} <= set(df.columns)
     assert "BLU" in set(df["ticker"])          # NYSE: prefix stripped
-    assert len(df[df["ticker"] == "BLU"]) == 1  # duplicate ticker dropped
-    assert df.set_index("ticker").loc["XOV", "agency_grade"] == "BB"
-    assert pd.isna(df.set_index("ticker").loc["FAL", "agency_grade"])  # SD excluded
+    t = df[df["ticker"] == "XOV"].iloc[0]
+    assert t["agency_grade"] == "BB"
+    fal = df[df["ticker"] == "FAL"].iloc[0]
+    assert pd.isna(fal["agency_grade"])        # SD excluded from stats
+
+
+def test_normalize_name_strips_suffixes_and_parentheticals():
+    assert normalize_name("Occidental Petroleum Corporation") == "OCCIDENTAL PETROLEUM"
+    assert normalize_name("Las Vegas Sands Corp. (NYSE:LVS)") == "LAS VEGAS SANDS"
+    assert normalize_name("McDERMOTT INTERNATIONAL, INC.") == "MCDERMOTT INTERNATIONAL"
+    assert normalize_name("US FOODS, INC.") == normalize_name("US Foods, Inc.")
+    assert normalize_name("Tyco") == "TYCO"    # lone token never stripped
 
 
 def test_notch_mapping_covers_full_scale():
@@ -73,8 +83,30 @@ def test_loader_reads_capiq_xlsx_layout(tmp_path):
     wb.save(path)
 
     df = load_agency_ratings(str(path))
-    assert set(df["ticker"]) == {"BLU", "UNR"}  # metadata + blank-ticker dropped
-    assert df.set_index("ticker").loc["BLU", "agency_grade"] == "AA"
+    # metadata rows dropped; blank-ticker row kept because its name can match
+    assert set(df["ticker"]) == {"BLU", "UNR", ""}
+    assert df[df["ticker"] == "BLU"].iloc[0]["agency_grade"] == "AA"
+    assert df[df["ticker"] == ""].iloc[0]["nname"] == "NO TICKER"
+
+
+def test_name_stage_matches_blank_ticker_rows():
+    agency = pd.DataFrame({
+        "ticker": ["BLU", "", ""],
+        "name": ["Blue Chip Energy Corp", "No Ticker Holdings, LLC", "Ambig Co"],
+        "nname": ["BLUE CHIP ENERGY", "NO TICKER HOLDINGS", ""],  # "" = conflicted
+        "agency_rating": ["AA", "BBB", "B"],
+        "agency_grade": ["AA", "BBB", "B"],
+    })
+    scored = pd.DataFrame({
+        "ticker": ["BLU", None, None],
+        "name": ["Blue Chip Energy", "NO TICKER HOLDINGS INC", "Ambig Company"],
+        "rating": ["AA", "BBB", "BB"],
+    })
+    c = compare_ratings(scored, agency)
+    assert c.n_by_ticker == 1
+    assert c.n_by_name == 1        # blank-ticker row found via name
+    assert c.n_matched == 2        # conflicted name stays unmatched
+    assert c.exact == 1.0
 
 
 def test_report_mentions_bias_and_counts():
