@@ -76,5 +76,5 @@ def format_credit_memo(
 4. Prefer risk-reducing structures (netting, CSA thresholds, shorter tenor) if commercial pressure exceeds unsecured capacity.
 
 ---
-*Illustrative CreditLab output — not a live SEFE / house credit decision.*
+*Illustrative CreditLab output — not a live credit decision.*
 """

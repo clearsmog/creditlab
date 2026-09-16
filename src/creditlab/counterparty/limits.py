@@ -1,8 +1,8 @@
 """Transparent counterparty limit policy for trading-credit demos.
 
 Maps rating grade + financial-ratio flags → proposed *unsecured* credit limit,
-max tenor, and documentation pack. The grid is pedagogical (not a real SEFE /
-house policy) but mirrors how energy trading credit desks reason:
+max tenor, and documentation pack. The grid is pedagogical (not a real house
+policy) but mirrors how energy trading credit desks reason:
 
   1. fundamentals → PD / internal rating
   2. rating + size → base unsecured capacity
