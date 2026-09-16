@@ -201,7 +201,7 @@ SEC EDGAR (+ optional private WRDS)
 
 ## Disclaimer
 
-Illustrative only. Not a regulatory model, not a real credit decision, and not affiliated with SEFE or any trading house. Do not use for live lending, trading limits, or capital without independent validation and governance.
+Illustrative only. Not a regulatory model, not a real credit decision, and not affiliated with any trading house. Do not use for live lending, trading limits, or capital without independent validation and governance.
 
 ---
 
