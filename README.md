@@ -259,6 +259,37 @@ PFE_addon ≈ notional × σ × √T × z
 
 Default σ = 35% (energy-ish placeholder). Use for *conversation*, not VaR sign-off.
 
+### Credit portfolio allocation & transaction costs
+
+`creditlab.portfolio.allocation` builds a long-only credit book under a
+mandate, and `creditlab.portfolio.tcost` prices the trades that get it there.
+
+```sh
+uv run python -m creditlab.portfolio.allocation                 # $2bn, rebalance from 6 months ago
+uv run python -m creditlab.portfolio.allocation --aum 5e8 --lookback-days 365
+```
+
+- **Objective:** maximise expected carry (spread − PD × LGD) net of trading
+  costs, solved as a convex programme in CVXPY (Clarabel).
+- **Mandate:** single-name, sector (2-digit SIC), CCC cap, IG floor and an
+  expected-loss budget for risk; an SIC negative screen for ESG; a cap on the
+  share of an issuer's debt held for liquidity; an optional turnover cap.
+  `check_mandate` reports every limit against a book.
+- **Costs:** half bid-ask spread by rating plus square-root impact on the share
+  of the issuer's debt traded. Levels are indicative, not calibrated.
+- **P&L impact:** one-off cost against the change in annual carry, with the
+  breakeven in months.
+- **Spreads:** ICE BofA index OAS by rating (FRED), applied to each issuer's
+  model rating. This is a bucket-level proxy: within a bucket, the model PD
+  separates names. Put issuer-level OAS in `spread_bps` when you have it.
+
+**Run on the panel (Sep 2026, 155 live issuers, $2bn):** start from the
+optimal book at March 2026 spreads, then rebalance to September's. A naive
+re-optimisation turns over 15.8% of the book and pays 12.6bp for 8.8bp of
+extra annual carry, so it is 3.8bp down after a year. The cost-aware
+rebalance turns over 4.4%, pays 3.1bp for 4.3bp of carry, and breaks even in
+under nine months. Both books pass every mandate check.
+
 ---
 
 ## Architecture (full lab)
@@ -293,7 +324,7 @@ SEC EDGAR (+ optional private WRDS)
 | `creditlab.counterparty` | **Trading desk:** limits, exposure, FO memo |
 | `creditlab.data` | EDGAR ingest, panel, ratios, labels |
 | `creditlab.models` | PD models, Merton, validation metrics |
-| `creditlab.portfolio` | Transitions, simulation, economic capital |
+| `creditlab.portfolio` | Transitions, simulation, economic capital, mandate-constrained allocation, transaction costs |
 | `creditlab.ecl` | IFRS 9 staging & scenario ECL |
 | `creditlab.viz` | Plotly helpers |
 
@@ -306,6 +337,7 @@ SEC EDGAR (+ optional private WRDS)
 | **SEC EDGAR XBRL API** | Primary fundamentals (public, license-clean) |
 | **WRDS Compustat / CRSP** | Optional private enrichment — **do not redistribute** |
 | **S&P / Moody’s published studies** | Transition / default-rate anchors |
+| **FRED: ICE BofA OAS by rating** | Allocation spreads. Fetched at run time and cached in `data/processed/`; ICE copyright, **do not redistribute** |
 
 `data/raw/` and `data/processed/` are **gitignored**. Respect SEC rate limits and User-Agent rules.
 
@@ -323,6 +355,7 @@ SEC EDGAR (+ optional private WRDS)
 - [x] Agency ratings benchmark vs Capital IQ export  
 - [x] Recalibration: central tendency 1.5%→3% (zeroed the S&P bias)  
 - [x] FAME private-counterparty book (UK unlisted energy names)  
+- [x] Mandate-constrained credit allocation with cost-aware rebalancing (CVXPY)  
 
 ---
 
